@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 from typing import override
-from urllib.parse import quote
 
 from homeassistant.components.camera import Camera, CameraEntityFeature
-from homeassistant.components.stream import CONF_RTSP_TRANSPORT
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -44,7 +42,6 @@ class MotorolaNurseryCamera(Camera):
             model="VM65",
             name=entry.title,
         )
-        self.stream_options[CONF_RTSP_TRANSPORT] = "tcp"
 
     @property
     @override
@@ -54,13 +51,5 @@ class MotorolaNurseryCamera(Camera):
 
     @override
     async def stream_source(self) -> str:
-        """Return the private loopback RTSP source."""
-        credentials = self._runtime.credentials
-        user = quote(credentials.rtsp_username, safe="")
-        password = quote(credentials.rtsp_password, safe="")
-        token = quote(credentials.access_token, safe="")
-        return (
-            f"rtsp://{user}:{password}@127.0.0.1:{self._runtime.bridge.port}"
-            f"/owner/streaming?accessToken={token}"
-        )
-
+        """Return H.264/AAC through the private on-demand relay."""
+        return self._runtime.relay.url

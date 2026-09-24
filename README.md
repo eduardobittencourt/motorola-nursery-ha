@@ -5,13 +5,16 @@ cameras that use the 5GenCare MagicP2P tunnel.
 
 The integration opens an authenticated connection to TCP port 77 on the camera,
 requests its internal RTSP service on port 6667, and exposes that stream only on
-a dynamic loopback port inside Home Assistant. Home Assistant's `stream`
-integration then provides snapshots and HLS playback.
+a dynamic loopback port inside Home Assistant. An on-demand FFmpeg relay copies
+the H.264 video and converts the camera's PCMA audio to AAC. Home Assistant's
+native `stream` integration then provides snapshots and HLS playback.
 
 ## Current status
 
 - Proven with one Motorola VM65 and one firmware/app combination.
-- H.264 video and PCMA audio pass through without media transcoding.
+- Native HLS validated at 1920x1080 with H.264 video and AAC-LC mono audio.
+- Video is copied without re-encoding; only PCMA audio is converted to AAC.
+- No custom WebRTC integration is required for snapshot or HLS playback.
 - The technical device credentials must currently be imported manually.
 - Token refresh, cloud-independent startup, discovery, and other camera models
   have not been validated.
@@ -28,12 +31,14 @@ technical parameters. Do not share them or include them in bug reports.
 ## Architecture
 
 ```text
-VM65 TCP/77 -> MagicP2P tunnel -> loopback RTSP bridge -> HA camera/stream
+VM65 TCP/77 -> MagicP2P -> loopback RTSP -> FFmpeg H.264/AAC -> HA Stream/HLS
 ```
 
-Every RTSP client gets its own camera tunnel and cipher state. The listener is
-bound to `127.0.0.1`, so it is not exposed to the LAN. No APK, vendor library,
-packet capture, account credential, or device credential is included here.
+Every RTSP client gets its own camera tunnel and cipher state. Both listeners
+are bound to `127.0.0.1`, so neither is exposed to the LAN. FFmpeg starts only
+while Home Assistant consumes the source and is terminated on disconnect or
+config-entry unload. No APK, vendor library, packet capture, account credential,
+or device credential is included here.
 
 ## Roadmap
 
@@ -45,4 +50,3 @@ packet capture, account credential, or device credential is included here.
 
 This project is an independent interoperability effort and is not affiliated
 with Motorola, 5GenCare, or Binatone.
-

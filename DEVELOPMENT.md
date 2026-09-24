@@ -12,14 +12,17 @@ Validated through the custom integration entry:
 - the bridge binds to an ephemeral `127.0.0.1` port inside Home Assistant;
 - the camera entity supplies an authenticated RTSP source to Home Assistant;
 - generated snapshot: JPEG, 1920x1080, HTTP 200;
-- generated HLS: valid playlist and 60 decoded H.264 frames at 1920x1080;
+- generated HLS: H.264 Main video at 1920x1080 and AAC-LC mono audio at 16 kHz;
 - entry survives a full Home Assistant restart.
 
-The HLS provider did not include the camera's PCMA track. The registered WebRTC
-provider advertises support for the entity and may transcode audio for browser
-playback, but that path needs an automated media assertion before it is marked
-validated. The standalone production path continues to use go2rtc to produce
-AAC audio.
+The first native HLS validation did not include the camera's PCMA track because
+Home Assistant Stream supports AAC and MP3 audio, not G.711/PCMA. The integration
+now includes an on-demand, loopback-only FFmpeg relay. It copies H.264 without
+re-encoding and converts only PCMA audio to AAC before Home Assistant consumes
+the source. Native HLS was validated after disabling the third-party WebRTC
+Camera config entry. Home Assistant's own system go2rtc provider may still offer
+WebRTC as an additional frontend path, but the integration does not require it.
+The standalone production path continues to use go2rtc as a fallback.
 
 ## Deliberately deferred
 
