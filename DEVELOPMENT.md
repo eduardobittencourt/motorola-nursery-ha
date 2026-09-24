@@ -2,9 +2,10 @@
 
 ## Live validation
 
-The initial custom integration was installed alongside the existing standalone
-bridge on a Home Assistant 2026.9.3 test system. The existing systemd service,
-Generic Camera entry, go2rtc stream, and dashboard were left in place.
+The custom integration is installed as the sole VM65 camera path on a Home
+Assistant 2026.9.3 system. The earlier standalone systemd bridge, Generic Camera
+entry, dedicated go2rtc stream, test dashboard, captures, and research tooling
+were removed after native validation.
 
 Validated through the custom integration entry:
 
@@ -19,10 +20,10 @@ The first native HLS validation did not include the camera's PCMA track because
 Home Assistant Stream supports AAC and MP3 audio, not G.711/PCMA. The integration
 now includes an on-demand, loopback-only FFmpeg relay. It copies H.264 without
 re-encoding and converts only PCMA audio to AAC before Home Assistant consumes
-the source. Native HLS was validated after disabling the third-party WebRTC
-Camera config entry. Home Assistant's own system go2rtc provider may still offer
-WebRTC as an additional frontend path, but the integration does not require it.
-The standalone production path continues to use go2rtc as a fallback.
+the source. Native HLS was validated without the third-party WebRTC Camera custom
+integration. Home Assistant's internal system provider may still offer WebRTC
+as an additional frontend path, but this integration neither configures nor
+requires it.
 
 ## Deliberately deferred
 

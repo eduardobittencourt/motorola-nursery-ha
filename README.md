@@ -18,8 +18,8 @@ native `stream` integration then provides snapshots and HLS playback.
 - The technical device credentials must currently be imported manually.
 - Token refresh, cloud-independent startup, discovery, and other camera models
   have not been validated.
-- The existing standalone bridge remains the production path while this custom
-  integration is evaluated side by side.
+- The custom integration is the only installed VM65 bridge and Home Assistant
+  camera path on the validated system.
 
 ## Development install
 
