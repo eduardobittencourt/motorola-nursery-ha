@@ -1,0 +1,28 @@
+{
+  "title": "Motorola Nursery Local",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Conectar uma câmera Motorola Nursery",
+        "description": "Configuração experimental avançada. Esta versão requer as credenciais técnicas do dispositivo.",
+        "data": {
+          "host": "Endereço da câmera",
+          "sid_user_id": "ID de usuário do SID",
+          "sid_device": "Valor de dispositivo do SID",
+          "magic_token": "Token MagicP2P",
+          "rtsp_username": "Usuário RTSP",
+          "rtsp_password": "Senha RTSP",
+          "access_token": "Token de acesso ao stream"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Não foi possível conectar à câmera",
+      "invalid_auth": "As credenciais técnicas são inválidas"
+    },
+    "abort": {
+      "already_configured": "Esta câmera já está configurada"
+    }
+  }
+}
+

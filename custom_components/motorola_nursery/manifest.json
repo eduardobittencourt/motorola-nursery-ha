@@ -1,0 +1,9 @@
+{
+  "domain": "motorola_nursery",
+  "name": "Motorola Nursery Local",
+  "version": "0.1.0-dev.1",
+  "config_flow": true,
+  "integration_type": "device",
+  "iot_class": "local_push"
+}
+

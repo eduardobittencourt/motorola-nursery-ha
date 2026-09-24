@@ -1,0 +1,12 @@
+"""Constants for Motorola Nursery Local."""
+
+DOMAIN = "motorola_nursery"
+PLATFORMS = ["camera"]
+
+CONF_SID_USER_ID = "sid_user_id"
+CONF_SID_DEVICE = "sid_device"
+CONF_MAGIC_TOKEN = "magic_token"
+CONF_RTSP_USERNAME = "rtsp_username"
+CONF_RTSP_PASSWORD = "rtsp_password"
+CONF_ACCESS_TOKEN = "access_token"
+

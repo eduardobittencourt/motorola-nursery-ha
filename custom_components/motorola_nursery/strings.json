@@ -1,0 +1,28 @@
+{
+  "title": "Motorola Nursery Local",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect a Motorola Nursery camera",
+        "description": "Experimental expert setup. Technical device credentials are required in this version.",
+        "data": {
+          "host": "Camera host",
+          "sid_user_id": "SID user ID",
+          "sid_device": "SID device value",
+          "magic_token": "MagicP2P token",
+          "rtsp_username": "RTSP username",
+          "rtsp_password": "RTSP password",
+          "access_token": "Streaming access token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the camera",
+      "invalid_auth": "The technical credentials are invalid"
+    },
+    "abort": {
+      "already_configured": "This camera is already configured"
+    }
+  }
+}
+
