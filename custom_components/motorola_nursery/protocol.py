@@ -109,13 +109,17 @@ def generate_sid(credentials: Credentials) -> bytes:
     return (identifier + device[:3] + token[:3] + digest).lower()
 
 
-def build_handshake(credentials: Credentials) -> tuple[bytes, bytes]:
+def build_handshake(
+    credentials: Credentials, *, target_port: int = INTERNAL_RTSP_PORT
+) -> tuple[bytes, bytes]:
     """Build a connection request and return it with the expected SID."""
+    if not 0 <= target_port <= 0xFFFF:
+        raise ValueError("Target port must fit in an unsigned 16-bit integer")
     sid = generate_sid(credentials)
     client_id = str(uuid.uuid4()).encode()
     request = (
         b"v002 888 "
-        + f"{INTERNAL_RTSP_PORT:05d} {len(sid):03d} ".encode()
+        + f"{target_port:05d} {len(sid):03d} ".encode()
         + sid
         + f" {len(client_id):04d} ".encode()
         + client_id
@@ -124,7 +128,7 @@ def build_handshake(credentials: Credentials) -> tuple[bytes, bytes]:
 
 
 class MagicP2PTunnel:
-    """One authenticated, encrypted TCP tunnel to the internal RTSP server."""
+    """One authenticated, encrypted TCP tunnel to an internal camera service."""
 
     def __init__(
         self,
@@ -138,13 +142,19 @@ class MagicP2PTunnel:
         self._decoder = MagicCipher(token)
 
     @classmethod
-    async def connect(cls, host: str, credentials: Credentials) -> MagicP2PTunnel:
+    async def connect(
+        cls,
+        host: str,
+        credentials: Credentials,
+        *,
+        target_port: int = INTERNAL_RTSP_PORT,
+    ) -> MagicP2PTunnel:
         """Open and authenticate a local camera connection."""
         credentials.validate()
         async with asyncio.timeout(CONNECT_TIMEOUT):
             reader, writer = await asyncio.open_connection(host, CAMERA_PORT)
             try:
-                request, sid = build_handshake(credentials)
+                request, sid = build_handshake(credentials, target_port=target_port)
                 writer.write(request)
                 await writer.drain()
                 response = await reader.readexactly(len(b"ok 0 dconn ") + len(sid) + 1)
