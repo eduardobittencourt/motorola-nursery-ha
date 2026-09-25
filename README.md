@@ -1,15 +1,30 @@
 # Motorola Nursery Local for Home Assistant
 
+[![Validate](https://github.com/eduardobittencourt/motorola-nursery-ha/actions/workflows/validate.yml/badge.svg)](https://github.com/eduardobittencourt/motorola-nursery-ha/actions/workflows/validate.yml)
+[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=eduardobittencourt&repository=motorola-nursery-ha&category=integration)
+
 Experimental Home Assistant integration for local video from Motorola Nursery
 cameras that use the 5GenCare MagicP2P tunnel. Tested with one VM65.
 
-## Account setup (0.2.0-dev.2)
+## Installation
 
-1. Copy `custom_components/motorola_nursery` into your Home Assistant configuration
-   directory and restart Home Assistant.
-2. Open **Settings > Devices & services > Add integration > Motorola Nursery Local**.
-3. Enter the email used in Motorola Nursery, then the six-digit email code.
-4. Select your camera and enter its local IP address or hostname.
+Until the repository is included in the default HACS catalog, add it as a
+custom repository:
+
+1. Open HACS, choose **Custom repositories**, and enter
+   `https://github.com/eduardobittencourt/motorola-nursery-ha` as an
+   **Integration**.
+2. Download **Motorola Nursery Local** and restart Home Assistant.
+3. Open **Settings > Devices & services > Add integration**.
+
+For manual installation, copy `custom_components/motorola_nursery` into the
+Home Assistant configuration directory and restart Home Assistant.
+
+## Account setup
+
+1. Open **Settings > Devices & services > Add integration > Motorola Nursery Local**.
+2. Enter the email used in Motorola Nursery, then the six-digit email code.
+3. Select your camera and enter its local IP address or hostname.
 
 The integration obtains the camera credentials and checks the local connection.
 No packet capture, phone proxy, or manually copied token is needed.
@@ -59,3 +74,7 @@ This independent interoperability project is not affiliated with Motorola,
 5GenCare or Binatone. No APK, vendor library, packet capture or personal account
 credentials are included. The VM65's shared RTSP application constants are
 included solely to construct its local stream credentials.
+
+Motorola and the Motorola logo are trademarks of Motorola Trademark Holdings,
+LLC. Brand artwork is used only to identify compatible products; see
+[BRAND_ASSETS.md](BRAND_ASSETS.md).

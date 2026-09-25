@@ -1,12 +1,17 @@
 {
   "domain": "motorola_nursery",
   "name": "Motorola Nursery Local",
-  "version": "0.2.0-dev.2",
+  "codeowners": [
+    "@eduardobittencourt"
+  ],
   "config_flow": true,
   "dependencies": [
     "ffmpeg",
     "stream"
   ],
+  "documentation": "https://github.com/eduardobittencourt/motorola-nursery-ha",
   "integration_type": "device",
-  "iot_class": "local_push"
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/eduardobittencourt/motorola-nursery-ha/issues",
+  "version": "0.2.0"
 }

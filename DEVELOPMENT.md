@@ -7,14 +7,14 @@ The original manual-credential integration was validated on Home Assistant
 The email-code protocol was separately verified using a fresh client identity,
 without reusing a captured login token.
 
-Version 0.2.0-dev.2 adds native email/code forms, camera selection, host entry,
+Version 0.2.0 adds native email/code forms, camera selection, host entry,
 reconfiguration, reauthentication and on-demand credential recovery. Automated
 tests use the real Home Assistant config-entry and flow infrastructure with
-synthetic cloud/camera responses. Version 0.2.0-dev.2 is installed on the
-target HA. Configuration validation
-passed, the existing entry and camera entity survived restart, snapshot and HLS
-returned HTTP 200, and the reconfiguration email form opened successfully.
-The final 0.2.0-dev.2 also fixes shutdown order for active clients and cancels
+synthetic cloud/camera responses. Version 0.2.0 was validated as 0.2.0-dev.2 on
+the target HA. Configuration validation passed, the existing entry and camera
+entity survived restart, snapshot and HLS returned HTTP 200, and the
+reconfiguration email form opened successfully.
+The final release also fixes shutdown order for active clients and cancels
 forwarding tasks on tunnel teardown. Live reload during HLS playback completed
 in 0.61 seconds and the snapshot worked again afterward. All 21 tests pass.
 Email-code login through the HA UI was completed successfully. The account
