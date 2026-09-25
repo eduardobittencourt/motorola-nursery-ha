@@ -1,9 +1,12 @@
 {
   "domain": "motorola_nursery",
   "name": "Motorola Nursery Local",
-  "version": "0.1.0-dev.2",
+  "version": "0.2.0-dev.2",
   "config_flow": true,
-  "dependencies": ["ffmpeg", "stream"],
+  "dependencies": [
+    "ffmpeg",
+    "stream"
+  ],
   "integration_type": "device",
   "iot_class": "local_push"
 }

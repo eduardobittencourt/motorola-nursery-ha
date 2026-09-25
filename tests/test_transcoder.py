@@ -10,6 +10,8 @@ import unittest
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import pytest
+
 MODULE_PATH = (
     Path(__file__).parents[1]
     / "custom_components"
@@ -23,6 +25,7 @@ sys.modules[SPEC.name] = transcoder
 SPEC.loader.exec_module(transcoder)
 
 
+@pytest.mark.usefixtures("socket_enabled")
 class FfmpegRelayTest(unittest.TestCase):
     """Exercise the private HTTP endpoint and process lifecycle."""
 
@@ -36,7 +39,7 @@ class FfmpegRelayTest(unittest.TestCase):
         fake_ffmpeg.write_text(
             "#!/usr/bin/env python3\n"
             "import sys, time\n"
-            "for _ in range(10):\n"
+            "while True:\n"
             "    sys.stdout.buffer.write(b'fake-mpeg-ts-payload')\n"
             "    sys.stdout.buffer.flush()\n"
             "    time.sleep(0.02)\n"
@@ -71,6 +74,8 @@ class FfmpegRelayTest(unittest.TestCase):
             self.assertTrue(response.startswith(b"HTTP/1.1 200 OK"))
             self.assertIn(b"Content-Type: video/MP2T", response)
             self.assertEqual(relay.active_processes, 1)
+            await asyncio.wait_for(relay.stop(), timeout=3)
+            self.assertEqual(relay.active_processes, 0)
             writer.close()
             await writer.wait_closed()
         finally:

@@ -1,39 +1,74 @@
 # Development status
 
-## Live validation
+## Scope of validation
 
-The custom integration is installed as the sole VM65 camera path on a Home
-Assistant 2026.9.3 system. The earlier standalone systemd bridge, Generic Camera
-entry, dedicated go2rtc stream, test dashboard, captures, and research tooling
-were removed after native validation.
+The original manual-credential integration was validated on Home Assistant
+2026.9.3 with a VM65: local tunnel, JPEG snapshot, H.264/AAC HLS and restart.
+The email-code protocol was separately verified using a fresh client identity,
+without reusing a captured login token.
 
-Validated through the custom integration entry:
+Version 0.2.0-dev.2 adds native email/code forms, camera selection, host entry,
+reconfiguration, reauthentication and on-demand credential recovery. Automated
+tests use the real Home Assistant config-entry and flow infrastructure with
+synthetic cloud/camera responses. Version 0.2.0-dev.2 is installed on the
+target HA. Configuration validation
+passed, the existing entry and camera entity survived restart, snapshot and HLS
+returned HTTP 200, and the reconfiguration email form opened successfully.
+The final 0.2.0-dev.2 also fixes shutdown order for active clients and cancels
+forwarding tasks on tunnel teardown. Live reload during HLS playback completed
+in 0.61 seconds and the snapshot worked again afterward. All 21 tests pass.
+Email-code login through the HA UI was completed successfully. The account
+session is stored, the same entry remains loaded, and snapshot/HLS returned
+HTTP 200 again after account linking.
 
-- config flow verifies a real MagicP2P handshake before creating the entry;
-- the bridge binds to an ephemeral `127.0.0.1` port inside Home Assistant;
-- the camera entity supplies an authenticated RTSP source to Home Assistant;
-- generated snapshot: JPEG, 1920x1080, HTTP 200;
-- generated HLS: H.264 Main video at 1920x1080 and AAC-LC mono audio at 16 kHz;
-- entry survives a full Home Assistant restart.
+## Reproducible tests
 
-The first native HLS validation did not include the camera's PCMA track because
-Home Assistant Stream supports AAC and MP3 audio, not G.711/PCMA. The integration
-now includes an on-demand, loopback-only FFmpeg relay. It copies H.264 without
-re-encoding and converts only PCMA audio to AAC before Home Assistant consumes
-the source. Native HLS was validated without the third-party WebRTC Camera custom
-integration. Home Assistant's internal system provider may still offer WebRTC
-as an additional frontend path, but this integration neither configures nor
-requires it.
+Use Python 3.14 and a virtual environment:
 
-## Deliberately deferred
+```sh
+python3.14 -m venv .venv
+.venv/bin/pip install -r requirements-test.txt
+.venv/bin/python -m pytest -q
+.venv/bin/ruff check custom_components tests
+.venv/bin/ruff format --check custom_components tests
+```
 
-- account login and device selection;
-- automatic token acquisition and refresh;
-- network discovery and DHCP address changes;
-- reauthentication and repairs;
-- multiple firmware/model coverage;
-- HACS release metadata and release automation;
-- long-running and offline-start tests.
+Tests do not send email or contact vendor servers. Protocol and relay tests
+open loopback listeners with generated data. Tests cover framing and keepalive,
+login/retry/abort, legacy reconfiguration, session rotation before list failure,
+serialized refresh, local playback without cloud, and diagnostic redaction.
 
-No proprietary APK, shared library, packet capture, firmware image, or secret
-belongs in this repository. Protocol tests use generated fixtures only.
+## Observed authentication protocol
+
+The client opens certificate-verified TLS to the vendor's camera service on
+port 3388, initially `9.moto.5gencare.com`. It handles newline-framed ASCII
+messages, including fragmented/coalesced reads and idle ping/pong.
+
+- `v3_otp`: submit a fresh 32-character uppercase alphanumeric client identity,
+  email address and six-digit code length; obtain user ID and routing host.
+- `v3_loginset`: submit that identity, email and received code; obtain session.
+- `v3_session`: resume using user ID, token and session ID. The returned token
+  replaces the previous token, which was observed to stop working.
+- `v3_dlist`: retrieve a count followed by seven fields per device, including
+  tunnel credentials and a URL-encoded display name.
+
+The local access token is SHA-1 of the device magic token concatenated with the
+VM65 application's shared RTSP password. Imported RTSP overrides are preserved.
+The unused login response field and unknown device fields are not interpreted.
+
+Save rotated tokens before any subsequent network operation. HA's normal
+config-entry storage writes asynchronously, so sudden process/power loss during
+rotation may require reauthentication. Do not log wire messages, stream URLs,
+session tokens, codes or device credentials.
+
+## Remaining validation
+
+- Validate a full HA restart after account linking (the earlier restart used
+  the existing local credentials).
+- Observe long-term session lifetime, rejected-session repair and phone coexistence.
+- Validate recovery under real credential changes, not only synthetic failures.
+- Test other models, regions and multiple cameras/accounts.
+- Add network discovery and release/HACS metadata as separate work.
+
+No APK, proprietary shared library, packet capture, firmware image or personal
+credential belongs in this repository.

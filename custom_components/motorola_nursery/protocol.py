@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 import hashlib
 import hmac
 import os
 import uuid
+from dataclasses import dataclass
 
 CAMERA_PORT = 77
 INTERNAL_RTSP_PORT = 6667
 CONNECT_TIMEOUT = 8
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class Credentials:
     """Technical credentials required by the local camera tunnel."""
 
@@ -89,9 +89,7 @@ class MagicCipher:
             key_byte = self._key[self._index]
             plain = value if encode else value ^ key_byte
             output.append(value ^ key_byte)
-            self._index = (
-                self._index + ((plain + key_byte) | 1)
-            ) % len(self._token)
+            self._index = (self._index + ((plain + key_byte) | 1)) % len(self._token)
         return bytes(output)
 
 
@@ -149,12 +147,12 @@ class MagicP2PTunnel:
                 request, sid = build_handshake(credentials)
                 writer.write(request)
                 await writer.drain()
-                response = await reader.readexactly(
-                    len(b"ok 0 dconn ") + len(sid) + 1
-                )
-                if (
-                    response[:-1] != b"ok 0 dconn " + sid
-                    or response[-1:] not in (b"\n", b"\r", b"\0", b" ")
+                response = await reader.readexactly(len(b"ok 0 dconn ") + len(sid) + 1)
+                if response[:-1] != b"ok 0 dconn " + sid or response[-1:] not in (
+                    b"\n",
+                    b"\r",
+                    b"\0",
+                    b" ",
                 ):
                     raise ConnectionError("Camera rejected the MagicP2P handshake")
             except BaseException:

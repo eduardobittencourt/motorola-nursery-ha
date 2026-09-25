@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
 import contextlib
+from collections.abc import Callable
 
 from .protocol import Credentials, MagicP2PTunnel
 
@@ -32,6 +32,10 @@ class RtspBridge:
             raise RuntimeError("RTSP bridge has not been started")
         return int(self._server.sockets[0].getsockname()[1])
 
+    def update_credentials(self, credentials: Credentials) -> None:
+        """Apply renewed credentials to new tunnels without touching active ones."""
+        self._credentials = credentials
+
     async def start(self) -> None:
         """Start the listener on an ephemeral loopback port."""
         if self._server is not None:
@@ -42,15 +46,17 @@ class RtspBridge:
 
     async def stop(self) -> None:
         """Stop accepting clients and close active tunnels."""
-        if self._server is not None:
-            self._server.close()
-            await self._server.wait_closed()
-            self._server = None
+        server, self._server = self._server, None
+        if server is not None:
+            server.close()
         tasks = tuple(self._tasks)
         for task in tasks:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+        if server is not None:
+            server.close_clients()
+            await server.wait_closed()
 
     async def _accept(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -68,10 +74,9 @@ class RtspBridge:
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         tunnel: MagicP2PTunnel | None = None
+        directions: set[asyncio.Task] = set()
         try:
-            tunnel = await MagicP2PTunnel.connect(
-                self._camera_host, self._credentials
-            )
+            tunnel = await MagicP2PTunnel.connect(self._camera_host, self._credentials)
 
             async def client_to_camera() -> None:
                 while data := await reader.read(65536):
@@ -97,6 +102,10 @@ class RtspBridge:
         except (ConnectionError, EOFError, OSError, TimeoutError) as err:
             self._on_connection_error(err)
         finally:
+            for direction in directions:
+                direction.cancel()
+            if directions:
+                await asyncio.gather(*directions, return_exceptions=True)
             writer.close()
             with contextlib.suppress(ConnectionError, OSError):
                 await writer.wait_closed()

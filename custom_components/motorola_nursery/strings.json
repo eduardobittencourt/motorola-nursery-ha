@@ -3,26 +3,68 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect a Motorola Nursery camera",
-        "description": "Experimental expert setup. Technical device credentials are required in this version.",
+        "title": "Connect your Motorola account",
+        "description": "Enter your Motorola Nursery email. We will request a six-digit sign-in code.",
         "data": {
-          "host": "Camera host",
-          "sid_user_id": "SID user ID",
-          "sid_device": "SID device value",
-          "magic_token": "MagicP2P token",
-          "rtsp_username": "RTSP username",
-          "rtsp_password": "RTSP password",
-          "access_token": "Streaming access token"
+          "email": "Email"
+        }
+      },
+      "code": {
+        "title": "Confirm the email code",
+        "description": "Enter the six-digit code sent by Motorola. No password is required.",
+        "data": {
+          "code": "Email code"
+        }
+      },
+      "devices": {
+        "title": "Load your cameras",
+        "description": "Login succeeded. Submit to retry loading the cameras without requesting another email code."
+      },
+      "device": {
+        "title": "Choose a camera",
+        "data": {
+          "device": "Camera"
+        }
+      },
+      "host": {
+        "title": "Connect to the camera",
+        "description": "Enter the camera’s local IP address or hostname. Home Assistant will verify the local connection.",
+        "data": {
+          "host": "Camera IP address or hostname"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure camera",
+        "menu_options": {
+          "user": "Connect or sign in to the Motorola account",
+          "change_host": "Change the camera IP address"
+        }
+      },
+      "change_host": {
+        "title": "Change the camera address",
+        "data": {
+          "host": "Camera IP address or hostname"
         }
       }
     },
     "error": {
-      "cannot_connect": "Unable to connect to the camera",
-      "invalid_auth": "The technical credentials are invalid"
+      "cannot_connect": "Unable to connect to the camera. Check its address, power and network.",
+      "invalid_auth": "The camera credentials are invalid.",
+      "cannot_connect_cloud": "Unable to reach Motorola. Try again.",
+      "invalid_email": "Enter a valid email address.",
+      "invalid_code": "The code is invalid or expired.",
+      "code_request_failed": "Motorola did not accept the code request. Wait before trying again.",
+      "cloud_error": "Motorola returned an unexpected response.",
+      "invalid_host": "Enter an IP address or hostname, without a URL or port."
     },
     "abort": {
-      "already_configured": "This camera is already configured"
+      "already_configured": "This camera is already configured. Use Reconfigure on its existing entry.",
+      "code_expired": "The login attempt expired. Start again to request a new code.",
+      "login_connection_lost": "The login connection or session expired. Start again to request a new code.",
+      "wrong_account": "The current camera was not found in this account. The existing configuration was preserved.",
+      "no_devices": "No supported cameras were found in this account.",
+      "reauth_successful": "The account was authenticated successfully.",
+      "reconfigure_successful": "The camera was reconfigured successfully."
     }
   }
 }
-

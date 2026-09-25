@@ -10,3 +10,7 @@ CONF_RTSP_USERNAME = "rtsp_username"
 CONF_RTSP_PASSWORD = "rtsp_password"
 CONF_ACCESS_TOKEN = "access_token"
 
+CONF_SESSION = "cloud_session"
+CONF_EMAIL = "email"
+CONF_CODE = "code"
+CONF_DEVICE = "device"

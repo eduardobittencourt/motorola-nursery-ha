@@ -38,6 +38,10 @@ class FfmpegRelay:
         """Return the number of running transcoders."""
         return len(self._processes)
 
+    def update_input_url(self, input_url: str) -> None:
+        """Use a refreshed local source when the next FFmpeg process starts."""
+        self._input_url = input_url
+
     async def start(self) -> None:
         """Start the private HTTP listener on an ephemeral port."""
         if self._server is not None:
@@ -48,16 +52,18 @@ class FfmpegRelay:
 
     async def stop(self) -> None:
         """Stop accepting streams and terminate every active transcoder."""
-        if self._server is not None:
-            self._server.close()
-            await self._server.wait_closed()
-            self._server = None
+        server, self._server = self._server, None
+        if server is not None:
+            server.close()
 
         tasks = tuple(self._tasks)
         for task in tasks:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+        if server is not None:
+            server.close_clients()
+            await server.wait_closed()
 
         processes = tuple(self._processes)
         for process in processes:

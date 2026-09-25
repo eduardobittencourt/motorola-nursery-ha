@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
-from pathlib import Path
 import sys
 import unittest
+from pathlib import Path
+
+import pytest
 
 MODULE_PATH = (
-    Path(__file__).parents[1]
-    / "custom_components"
-    / "motorola_nursery"
-    / "protocol.py"
+    Path(__file__).parents[1] / "custom_components" / "motorola_nursery" / "protocol.py"
 )
 SPEC = importlib.util.spec_from_file_location("motorola_protocol", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
@@ -30,7 +29,9 @@ class CipherTest(unittest.TestCase):
         encoded = protocol.MagicCipher(token).encode(plaintext)
         decoder = protocol.MagicCipher(token)
         fragments = [encoded[:3], encoded[3:11], encoded[11:29], encoded[29:]]
-        self.assertEqual(b"".join(decoder.decode(part) for part in fragments), plaintext)
+        self.assertEqual(
+            b"".join(decoder.decode(part) for part in fragments), plaintext
+        )
 
     def test_sid_and_handshake_shapes(self) -> None:
         credentials = protocol.Credentials(
@@ -49,6 +50,7 @@ class CipherTest(unittest.TestCase):
         self.assertIn(sid, request)
 
 
+@pytest.mark.usefixtures("socket_enabled")
 class TunnelTest(unittest.IsolatedAsyncioTestCase):
     """Exercise the handshake delimiter and bidirectional cipher state."""
 
@@ -84,9 +86,7 @@ class TunnelTest(unittest.IsolatedAsyncioTestCase):
         original_port = protocol.CAMERA_PORT
         protocol.CAMERA_PORT = server.sockets[0].getsockname()[1]
         try:
-            tunnel = await protocol.MagicP2PTunnel.connect(
-                "127.0.0.1", credentials
-            )
+            tunnel = await protocol.MagicP2PTunnel.connect("127.0.0.1", credentials)
             await tunnel.send(b"OPTIONS rtsp://camera/ RTSP/1.0\r\n\r\n")
             self.assertEqual(await tunnel.receive(), b"RTSP/1.0 200 OK\r\n\r\n")
             await tunnel.close()
@@ -94,9 +94,7 @@ class TunnelTest(unittest.IsolatedAsyncioTestCase):
             protocol.CAMERA_PORT = original_port
             server.close()
             await server.wait_closed()
-        self.assertEqual(
-            received, [b"OPTIONS rtsp://camera/ RTSP/1.0\r\n\r\n"]
-        )
+        self.assertEqual(received, [b"OPTIONS rtsp://camera/ RTSP/1.0\r\n\r\n"])
 
 
 if __name__ == "__main__":

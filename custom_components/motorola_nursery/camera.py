@@ -39,7 +39,7 @@ class MotorolaNurseryCamera(Camera):
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, self._attr_unique_id)},
             manufacturer="Motorola Nursery",
-            model="VM65",
+            model=entry.data.get("model", "VM65"),
             name=entry.title,
         )
 
@@ -52,4 +52,5 @@ class MotorolaNurseryCamera(Camera):
     @override
     async def stream_source(self) -> str:
         """Return H.264/AAC through the private on-demand relay."""
+        await self._runtime.async_prepare_stream()
         return self._runtime.relay.url
