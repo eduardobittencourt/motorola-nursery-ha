@@ -4,14 +4,14 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # pytest-homeassistant-custom-component pins these exactly; Dependabot must
+    # update them only as part of that package's own compatible release.
+    ignore:
+      - dependency-name: coverage
+      - dependency-name: pytest
     groups:
       test-dependencies:
         patterns: ["*"]
-        exclude-patterns:
-          # These versions are pinned by pytest-homeassistant-custom-component
-          # and must move together with that package.
-          - coverage
-          - pytest
   - package-ecosystem: github-actions
     directory: /
     schedule:
