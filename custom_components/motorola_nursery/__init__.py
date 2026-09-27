@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import ssl
 import time
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -18,7 +19,9 @@ from .auth import async_refresh_credentials, credentials_from_data
 from .bridge import RtspBridge
 from .cloud import AuthenticationError, CloudError
 from .const import CONF_SESSION, PLATFORMS
+from .coordinator import MotorolaTelemetryCoordinator
 from .protocol import Credentials, MagicP2PTunnel
+from .telemetry import TelemetryClient
 from .transcoder import FfmpegRelay
 
 _LOGGER = logging.getLogger(__name__)
@@ -47,6 +50,7 @@ class RuntimeData:
     next_refresh: float = 0
     recovery_task: asyncio.Task | None = None
     stopping: bool = False
+    telemetry: MotorolaTelemetryCoordinator | None = None
 
     async def async_prepare_stream(self, *, force: bool = False) -> None:
         # Existing imported entries remain fully compatible and local.
@@ -104,6 +108,8 @@ class RuntimeData:
 
     async def async_stop(self) -> None:
         self.stopping = True
+        if self.telemetry is not None:
+            await self.telemetry.async_shutdown()
         if self.recovery_task is not None:
             self.recovery_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -143,6 +149,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await relay.start()
         runtime = RuntimeData(hass, entry, bridge, relay, credentials)
         entry.runtime_data = runtime
+        if CONF_SESSION in entry.data:
+            context = await hass.async_add_executor_job(ssl.create_default_context)
+            client = TelemetryClient(entry.data[CONF_SESSION]["host"], context)
+            runtime.telemetry = MotorolaTelemetryCoordinator(hass, entry, client)
+            # A cloud outage must not prevent the local camera from loading.
+            await runtime.telemetry.async_refresh()
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except BaseException:
         if runtime is not None:

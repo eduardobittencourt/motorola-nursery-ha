@@ -6,7 +6,45 @@
 Experimental Home Assistant integration for local video from Motorola Nursery
 cameras that use the 5GenCare MagicP2P tunnel. Tested with one VM65.
 
+Version 0.3.0 also provides **read-only sensors through the Motorola cloud**.
+Video and audio still travel over the LAN; telemetry requires internet access
+and an account-linked entry. A telemetry outage does not interrupt local video.
+
+## Sensors and camera information
+
+On the verified VM65CONNECT, the integration discovers 18 additional entities:
+
+- Temperature in °C and Wi-Fi signal quality in percent.
+- Configured video bitrate, image brightness and night-vision mode.
+- Speaker volume and motion/sound sensitivity settings.
+- Low/high temperature thresholds and whether each temperature alert is enabled.
+- Image inversion, motion-zone mode and the four zone enable states.
+
+Hardware and firmware versions appear in the existing device information.
+All settings above are **read-only sensors**, not switches or controls. Motion
+and sound sensitivity are configuration values, not detection events. Zone
+enable states do not mean motion was detected. The configured bitrate is not a
+measurement of current network throughput.
+
+The sensors share one poll every 60 seconds, use the camera credentials already
+stored in the entry and do not rotate the account session. The client validates
+TLS certificates and sends only authentication, capability discovery, getters
+and keepalives. It never sends camera-setting commands. It does not read Wi-Fi
+names, MAC addresses, sharing information or playlists.
+
+Only advertised, supported capabilities become entities. Invalid individual
+values become unavailable. If the cloud is unavailable at startup, the camera
+still loads and sensors appear when telemetry recovers. Existing manual-only
+entries retain local playback; use **Reconfigure > Connect or sign in to the
+Motorola account** to enable sensor discovery.
+
+This release does not expose PTZ, talkback, lullaby playback, firmware updates,
+camera restarts, or motion/sound event sensors. See [PROTOCOL.md](PROTOCOL.md)
+for the verified protocol and compatibility limits.
+
 ## Installation
+
+Requires Home Assistant 2026.9.3 or newer.
 
 Until the repository is included in the default HACS catalog, add it as a
 custom repository:

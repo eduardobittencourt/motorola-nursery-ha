@@ -1,5 +1,23 @@
 # Development status
 
+## Read-only telemetry (0.3.0)
+
+See [PROTOCOL.md](PROTOCOL.md) for the independently implemented TLS telemetry
+protocol and verified VM65CONNECT fields. The telemetry test suite uses synthetic
+responses and the real HA entity lifecycle. It covers delayed discovery after an
+initial cloud failure, sensor unavailability/recovery without stopping video,
+shared device identity, metadata and polling cleanup. Media dependencies are
+mocked in the lifecycle test; it does not contact a camera or cloud service.
+
+Live validation on Home Assistant 2026.9.3 found 18 available telemetry entities
+and the original camera on one device, with hardware V1.2.03 and firmware V1.6.37.
+Configuration validation passed. After installing 0.3.0 and restarting HA,
+snapshot and HLS media requests returned HTTP 200. All 37 automated tests and
+Ruff checks pass. Automatic one-minute polling remained healthy for more than
+40 minutes after deployment, and the HA logs contained no integration errors.
+No camera-setting commands were sent. Multi-day telemetry availability and
+other devices remain unverified.
+
 ## Scope of validation
 
 The original manual-credential integration was validated on Home Assistant

@@ -1,4 +1,4 @@
-# Home Assistant validation plan — 0.2.0-dev.2
+# Home Assistant validation plan — 0.3.0
 
 The package contains only custom_components/motorola_nursery. No account
 configuration, capture or research tooling is included.
@@ -14,12 +14,20 @@ configuration, capture or research tooling is included.
 ## Live acceptance
 
 1. Confirm the existing camera entity still provides a snapshot and playback.
-2. Open the integration entry menu, choose Reconfigure, then account login.
-3. Enter the email and the received code in HA, and confirm the camera IP.
-4. Confirm the same entity ID remains, snapshot works and HLS has audio.
-5. Restart HA and check playback using the saved credentials.
+2. On an account-linked VM65CONNECT, confirm 18 additional sensor/binary-sensor
+   entities attach to the existing device, with firmware/hardware information.
+3. Compare temperature with the monitor/app. It uses tenths of °C on the wire;
+   threshold settings use whole °C. Confirm Wi-Fi is a percentage, not dBm.
+4. Confirm values refresh after at least one 60-second polling interval and
+   the original camera entity still provides a snapshot and HLS playback.
+5. Test cloud failure/recovery synthetically. Do not disable the home's internet
+   or camera connection while monitoring a baby. Legacy manual entries must
+   retain video without attempting cloud telemetry; link the account only when
+   sensor onboarding is explicitly being tested.
 6. Check sanitized diagnostics and logs. Do not force token expiry or alter the
    working account just to exercise an artificial failure.
+7. Do not test audio playback, talkback, PTZ, night-vision writes, firmware updates
+   or camera reboots as part of sensor acceptance. This release has no setters.
 
 ## Rollback
 

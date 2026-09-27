@@ -162,7 +162,14 @@ async def test_rejected_cloud_session_starts_reauth_without_email(hass):
 async def test_diagnostics_excludes_all_account_and_device_data(hass):
     entry = entry_for(hass)
     result = await async_get_config_entry_diagnostics(hass, entry)
-    assert set(result) == {"entry_version", "account_login_configured", "entry_state"}
+    assert set(result) == {
+        "entry_version",
+        "account_login_configured",
+        "entry_state",
+        "telemetry_configured",
+        "telemetry_available",
+        "telemetry_capability_count",
+    }
     assert result["account_login_configured"] is True
 
 

@@ -66,5 +66,70 @@
       "reauth_successful": "The account was authenticated successfully.",
       "reconfigure_successful": "The camera was reconfigured successfully."
     }
+  },
+  "entity": {
+    "sensor": {
+      "temperature": {
+        "name": "Temperature"
+      },
+      "wifi_signal": {
+        "name": "Wi-Fi signal"
+      },
+      "video_bitrate": {
+        "name": "Configured video bitrate"
+      },
+      "night_vision": {
+        "name": "Night vision mode",
+        "state": {
+          "off": "Off",
+          "on": "On",
+          "auto": "Automatic"
+        }
+      },
+      "video_brightness": {
+        "name": "Image brightness"
+      },
+      "speaker_volume": {
+        "name": "Speaker volume"
+      },
+      "motion": {
+        "name": "Motion sensitivity"
+      },
+      "sound": {
+        "name": "Sound sensitivity"
+      },
+      "temperature_low": {
+        "name": "Low temperature threshold"
+      },
+      "temperature_high": {
+        "name": "High temperature threshold"
+      }
+    },
+    "binary_sensor": {
+      "ceiling_mount": {
+        "name": "Image inverted"
+      },
+      "low_temperature_alert": {
+        "name": "Low temperature alert enabled"
+      },
+      "high_temperature_alert": {
+        "name": "High temperature alert enabled"
+      },
+      "motion_zones": {
+        "name": "Motion zones enabled"
+      },
+      "motion_zone_1": {
+        "name": "Motion zone 1 enabled"
+      },
+      "motion_zone_2": {
+        "name": "Motion zone 2 enabled"
+      },
+      "motion_zone_3": {
+        "name": "Motion zone 3 enabled"
+      },
+      "motion_zone_4": {
+        "name": "Motion zone 4 enabled"
+      }
+    }
   }
 }

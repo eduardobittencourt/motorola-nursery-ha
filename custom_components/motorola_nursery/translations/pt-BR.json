@@ -66,5 +66,70 @@
       "reauth_successful": "A conta foi autenticada com sucesso.",
       "reconfigure_successful": "A câmera foi reconfigurada com sucesso."
     }
+  },
+  "entity": {
+    "sensor": {
+      "temperature": {
+        "name": "Temperatura"
+      },
+      "wifi_signal": {
+        "name": "Sinal Wi-Fi"
+      },
+      "video_bitrate": {
+        "name": "Taxa de bits configurada"
+      },
+      "night_vision": {
+        "name": "Modo de visão noturna",
+        "state": {
+          "off": "Desligada",
+          "on": "Ligada",
+          "auto": "Automática"
+        }
+      },
+      "video_brightness": {
+        "name": "Brilho da imagem"
+      },
+      "speaker_volume": {
+        "name": "Volume do alto-falante"
+      },
+      "motion": {
+        "name": "Sensibilidade de movimento"
+      },
+      "sound": {
+        "name": "Sensibilidade de som"
+      },
+      "temperature_low": {
+        "name": "Limite de temperatura baixa"
+      },
+      "temperature_high": {
+        "name": "Limite de temperatura alta"
+      }
+    },
+    "binary_sensor": {
+      "ceiling_mount": {
+        "name": "Imagem invertida"
+      },
+      "low_temperature_alert": {
+        "name": "Alerta de temperatura baixa habilitado"
+      },
+      "high_temperature_alert": {
+        "name": "Alerta de temperatura alta habilitado"
+      },
+      "motion_zones": {
+        "name": "Zonas de movimento habilitadas"
+      },
+      "motion_zone_1": {
+        "name": "Zona de movimento 1 habilitada"
+      },
+      "motion_zone_2": {
+        "name": "Zona de movimento 2 habilitada"
+      },
+      "motion_zone_3": {
+        "name": "Zona de movimento 3 habilitada"
+      },
+      "motion_zone_4": {
+        "name": "Zona de movimento 4 habilitada"
+      }
+    }
   }
 }
