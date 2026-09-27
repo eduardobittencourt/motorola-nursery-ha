@@ -129,6 +129,12 @@
       },
       "motion_zone_4": {
         "name": "Motion zone 4 enabled"
+      },
+      "motion_detected": {
+        "name": "Motion detected"
+      },
+      "sound_detected": {
+        "name": "Sound detected"
       }
     },
     "number": {
@@ -223,6 +229,14 @@
     "media_player": {
       "lullabies": {
         "name": "Lullabies"
+      }
+    },
+    "event": {
+      "motion_detected": {
+        "name": "Motion detection"
+      },
+      "sound_detected": {
+        "name": "Sound detection"
       }
     }
   }

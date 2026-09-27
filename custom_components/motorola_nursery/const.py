@@ -10,6 +10,7 @@ PLATFORMS = [
     "switch",
     "button",
     "media_player",
+    "event",
 ]
 
 CONF_SID_USER_ID = "sid_user_id"

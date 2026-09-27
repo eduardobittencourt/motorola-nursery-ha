@@ -6,7 +6,8 @@
 Experimental Home Assistant integration for local video from Motorola Nursery
 cameras that use the 5GenCare MagicP2P tunnel. Tested with one VM65.
 
-Version 0.4.0 also provides **sensors and controls through the Motorola cloud**.
+Version 0.5.0 also provides **sensors, controls and real-time detection events
+through the Motorola cloud**.
 Video and audio still travel over the LAN; telemetry requires internet access
 and an account-linked entry. A telemetry outage does not interrupt local video.
 
@@ -60,8 +61,28 @@ setting write is read back before HA updates its state.
 Firmware updates, reset/reboot, debug shell access, storage formatting, song
 upload/removal and arbitrary protocol commands are deliberately blocked. The
 microSD fields used by the app returned no data on the verified camera. Talkback
-and motion/sound event notifications are not yet integrated. See
+is not yet integrated. See
 [PROTOCOL.md](PROTOCOL.md) for protocol details and compatibility limits.
+
+## Motion and sound detections
+
+An account-linked camera exposes two binary sensors and two native event
+entities for real motion and sound detections. Binary sensors turn on for ten
+seconds and include a `last_detected` timestamp. Native event entities emit a
+`detected` event for every notification, including repeated detections within
+those ten seconds.
+
+The integration also fires `motorola_nursery_event` on the Home Assistant event
+bus with `event_type` equal to `motion` or `sound`. The payload contains no media
+filename, URL, account token or camera token. Home Assistant automations can use
+the binary sensors, native event entities or the bus event to send a mobile
+notification. The integration itself does not choose a notification recipient.
+
+Detections use one persistent certificate-verified connection and normally
+arrive without waiting for the 60-second telemetry poll. The listener answers
+camera keepalives, reconnects with bounded backoff and deduplicates replayed
+notifications. Detection entities become unavailable while this cloud channel
+is disconnected; local video remains independent.
 
 ## Installation
 

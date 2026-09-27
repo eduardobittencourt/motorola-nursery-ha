@@ -129,6 +129,12 @@
       },
       "motion_zone_4": {
         "name": "Zona de movimento 4 habilitada"
+      },
+      "motion_detected": {
+        "name": "Movimento detectado"
+      },
+      "sound_detected": {
+        "name": "Som detectado"
       }
     },
     "number": {
@@ -223,6 +229,14 @@
     "media_player": {
       "lullabies": {
         "name": "Canções de ninar"
+      }
+    },
+    "event": {
+      "motion_detected": {
+        "name": "Detecção de movimento"
+      },
+      "sound_detected": {
+        "name": "Detecção de som"
       }
     }
   }

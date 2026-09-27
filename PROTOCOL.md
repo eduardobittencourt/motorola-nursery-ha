@@ -18,6 +18,13 @@ is `app 1 OK`. These are saved per-camera credentials, not a new account login.
 The client does not call `v3_session` or rotate account tokens to poll sensors.
 Keepalives use `ping`/`pong`; the app also acknowledges `pong` with `pang`.
 
+The camera broadcasts detection notifications on the same authenticated
+connection as `notify <camera-magic-token> <type> <opaque-event-name>`. Verified
+types are `motiondetect`, `sounddetect` and `sounddetect2`. The integration
+validates the token and exact frame shape, maps both sound variants to one sound
+event, and never stores or exposes the opaque event name. A bounded in-memory
+fingerprint cache suppresses replayed notifications after reconnects.
+
 `caplist` returns `caplist <count>` followed by five fields per capability:
 name, access marker, type, minimum, maximum. The `w` marker means a setting is
 writable by the vendor protocol; it can still be queried with a getter. Writes
@@ -91,6 +98,8 @@ TLS verification is mandatory. Exceptions and diagnostics omit raw messages,
 credentials, account identifiers and camera/network addresses. Diagnostics expose
 only setup/availability flags and the number of recognized capabilities.
 
-A reported setting is not proof of physical actuation. Event notifications,
-long-term cloud behavior and other firmware versions need separate validation.
+A reported setting is not proof of physical actuation. Motion and sound notify
+frames are implemented from the verified vendor protocol; physical detection
+latency, long-term cloud behavior and other firmware versions need broader live
+validation.
 The local video path remains independent of this telemetry channel.

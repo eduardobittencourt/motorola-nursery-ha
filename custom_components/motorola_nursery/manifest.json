@@ -11,7 +11,7 @@
   ],
   "documentation": "https://github.com/eduardobittencourt/motorola-nursery-ha",
   "integration_type": "device",
-  "iot_class": "cloud_poll",
+  "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/eduardobittencourt/motorola-nursery-ha/issues",
-  "version": "0.4.0"
+  "version": "0.5.0"
 }

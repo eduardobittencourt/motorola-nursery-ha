@@ -1,4 +1,4 @@
-# Home Assistant validation plan — 0.4.0
+# Home Assistant validation plan — 0.5.0
 
 The package contains only custom_components/motorola_nursery. No account
 configuration, capture or research tooling is included.
@@ -39,6 +39,19 @@ configuration, capture or research tooling is included.
    and restore the original volume.
 4. Confirm snapshot and HLS after controls. Do not exercise firmware, reset,
    storage formatting, debug shell, song upload/removal or arbitrary commands.
+
+## Detection acceptance
+
+1. Confirm motion/sound binary sensors and event entities are attached to the
+   existing camera device and are available.
+2. Move through the camera image. Confirm the motion binary sensor pulses for ten
+   seconds and the motion event entity records a `detected` event.
+3. After any camera-side cooldown, clap near the camera. Confirm the equivalent
+   sound entities update. Do not use the camera's own PTZ or speaker as stimuli;
+   this firmware suppresses those self-generated changes.
+4. Listen for `motorola_nursery_event` and verify its payload contains only
+   `device_id`, `event_type` and `detected_at`.
+5. Confirm snapshot, HLS and telemetry remain available throughout the test.
 
 ## Rollback
 

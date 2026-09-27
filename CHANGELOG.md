@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0 — 2026-09-27
+
+- Add real-time motion and sound detection over the camera's authenticated,
+  certificate-verified push channel.
+- Add pulse-style binary sensors and native Home Assistant event entities so
+  closely spaced detections remain individually usable in automations.
+- Fire privacy-minimized `motorola_nursery_event` bus events containing only the
+  configured device identifier, detection type and receive timestamp.
+- Reconnect with bounded backoff, answer protocol keepalives and deduplicate
+  replayed vendor notifications without interrupting local video or telemetry.
+- Add parser, authentication, keepalive, privacy and deduplication tests.
+
 ## 0.4.0 — 2026-09-27
 
 - Add validated controls for night vision, image settings, quality, alert
