@@ -83,7 +83,8 @@ class MagicCipher:
         return self._transform(data, encode=False)
 
     def _transform(self, data: bytes, *, encode: bool) -> bytes:
-        assert self._key is not None
+        if self._key is None:
+            raise RuntimeError("Cipher is not initialized")
         output = bytearray()
         for value in data:
             key_byte = self._key[self._index]

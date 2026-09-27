@@ -62,7 +62,10 @@ class RtspBridge:
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         task = asyncio.current_task()
-        assert task is not None
+        if task is None:
+            writer.close()
+            await writer.wait_closed()
+            raise RuntimeError("Bridge connection has no owning task")
         self._tasks.add(task)
         try:
             async with self._slots:

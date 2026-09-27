@@ -68,9 +68,11 @@ Use Python 3.14 and a virtual environment:
 ```sh
 python3.14 -m venv .venv
 .venv/bin/pip install -r requirements-test.txt
-.venv/bin/python -m pytest -q
 .venv/bin/ruff check custom_components tests
 .venv/bin/ruff format --check custom_components tests
+.venv/bin/bandit -q -r custom_components/motorola_nursery
+.venv/bin/coverage run --source=custom_components/motorola_nursery -m pytest -q
+.venv/bin/coverage report --fail-under=80
 ```
 
 Tests do not send email or contact vendor servers. Protocol and relay tests
@@ -106,7 +108,7 @@ session tokens, codes or device credentials.
 - Observe long-term session lifetime, rejected-session repair and phone coexistence.
 - Validate recovery under real credential changes, not only synthetic failures.
 - Test other models, regions and multiple cameras/accounts.
-- Add network discovery and release/HACS metadata as separate work.
+- Add network discovery and validate additional camera models and regions.
 
 No APK, proprietary shared library, packet capture, firmware image or personal
 credential belongs in this repository.

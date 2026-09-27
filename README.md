@@ -1,10 +1,11 @@
-# Motorola Nursery Local for Home Assistant
+# Motorola Nursery for Home Assistant
 
 [![Validate](https://github.com/eduardobittencourt/motorola-nursery-ha/actions/workflows/validate.yml/badge.svg)](https://github.com/eduardobittencourt/motorola-nursery-ha/actions/workflows/validate.yml)
 [![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=eduardobittencourt&repository=motorola-nursery-ha&category=integration)
 
-Experimental Home Assistant integration for local video from Motorola Nursery
-cameras that use the 5GenCare MagicP2P tunnel. Tested with one VM65.
+Community Home Assistant integration for Motorola Nursery cameras that use the
+5GenCare MagicP2P tunnel. It provides local video plus optional cloud-backed
+telemetry, controls, and detection events. Tested with one VM65CONNECT.
 
 Version 0.5.0 also provides **sensors, controls and real-time detection events
 through the Motorola cloud**.
@@ -94,7 +95,7 @@ custom repository:
 1. Open HACS, choose **Custom repositories**, and enter
    `https://github.com/eduardobittencourt/motorola-nursery-ha` as an
    **Integration**.
-2. Download **Motorola Nursery Local** and restart Home Assistant.
+2. Download **Motorola Nursery** and restart Home Assistant.
 3. Open **Settings > Devices & services > Add integration**.
 
 For manual installation, copy `custom_components/motorola_nursery` into the
@@ -102,7 +103,7 @@ Home Assistant configuration directory and restart Home Assistant.
 
 ## Account setup
 
-1. Open **Settings > Devices & services > Add integration > Motorola Nursery Local**.
+1. Open **Settings > Devices & services > Add integration > Motorola Nursery**.
 2. Enter the email used in Motorola Nursery, then the six-digit email code.
 3. Select your camera and enter its local IP address or hostname.
 
@@ -149,6 +150,18 @@ email code always requires submitting the email form.
   service alone is not currently a renewal trigger.
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for testing and protocol details.
+
+## Support and security
+
+Before opening a bug report, review the compatibility limits above and enable
+debug logging only for the shortest time needed. Remove account identifiers,
+camera addresses, stream URLs, email codes, tokens, and credentials from logs.
+Use the repository's issue forms for reproducible bugs and feature requests.
+
+Do not report vulnerabilities in a public issue. Follow
+[SECURITY.md](SECURITY.md) to send a private report. Contributions are welcome;
+see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
 This independent interoperability project is not affiliated with Motorola,
 5GenCare or Binatone. No APK, vendor library, packet capture or personal account

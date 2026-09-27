@@ -1,4 +1,4 @@
-"""Camera entity for Motorola Nursery Local."""
+"""Camera entity for Motorola Nursery."""
 
 from __future__ import annotations
 

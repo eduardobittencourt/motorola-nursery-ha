@@ -47,8 +47,10 @@ def device_data(device: Device, previous: Mapping[str, Any] | None = None) -> di
         CONF_MAGIC_TOKEN: device.magic_token,
         CONF_RTSP_USERNAME: previous.get(CONF_RTSP_USERNAME, RTSP_USERNAME),
         CONF_RTSP_PASSWORD: password,
+        # The camera protocol requires this legacy digest as an identifier. It is
+        # not used as a password hash, signature, or other security primitive.
         CONF_ACCESS_TOKEN: hashlib.sha1(
-            (device.magic_token + password).encode()
+            (device.magic_token + password).encode(), usedforsecurity=False
         ).hexdigest(),
         "model": device.model,
     }

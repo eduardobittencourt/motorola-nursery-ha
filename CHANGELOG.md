@@ -11,6 +11,10 @@
 - Reconnect with bounded backoff, answer protocol keepalives and deduplicate
   replayed vendor notifications without interrupting local video or telemetry.
 - Add parser, authentication, keepalive, privacy and deduplication tests.
+- Harden optimized-runtime error handling and document the protocol-mandated
+  non-security SHA-1 identifier explicitly for static analysis.
+- Add security reporting, contribution guidelines, issue/PR templates,
+  dependency updates, pinned CI actions, Bandit, coverage gating and CodeQL.
 
 ## 0.4.0 — 2026-09-27
 

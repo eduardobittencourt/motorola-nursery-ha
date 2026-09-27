@@ -1,0 +1,64 @@
+name: Bug report
+description: Report a reproducible problem with the integration
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include email codes, tokens, credentials, stream URLs, account or device identifiers, or private addresses.
+  - type: input
+    id: integration-version
+    attributes:
+      label: Integration version
+      placeholder: 0.5.0
+    validations:
+      required: true
+  - type: input
+    id: home-assistant-version
+    attributes:
+      label: Home Assistant version
+      placeholder: 2026.9.4
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Camera model and firmware
+      description: Do not include serial numbers or other unique identifiers.
+      placeholder: VM65CONNECT, firmware 1.6.37
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe what happened and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs or diagnostics
+      description: Remove all private data before attaching output.
+      render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues.
+          required: true
+        - label: I removed credentials, tokens, codes, identifiers, URLs, and private addresses.
+          required: true
+        - label: This is not a security vulnerability; those are reported privately.
+          required: true

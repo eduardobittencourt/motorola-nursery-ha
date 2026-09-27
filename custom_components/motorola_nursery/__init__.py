@@ -1,4 +1,4 @@
-"""Motorola Nursery Local integration."""
+"""Motorola Nursery integration."""
 
 from __future__ import annotations
 

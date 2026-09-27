@@ -5,3 +5,5 @@ pytest-homeassistant-custom-component==0.13.366
 pytest==9.0.3
 pytest-asyncio==1.4.0
 ruff==0.16.9
+bandit==1.9.4
+coverage==7.15.4

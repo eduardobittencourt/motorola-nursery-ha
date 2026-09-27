@@ -168,7 +168,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         try:
             if self._client is None:
-                assert self._session is not None
+                if self._session is None:
+                    return self.async_abort(reason="login_connection_lost")
                 self._client = await async_client(self.hass, self._session.host)
                 await self._client.connect()
                 self._session = await self._client.resume(self._session)
@@ -225,7 +226,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_host(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        assert self._selected is not None and self._session is not None
+        if self._selected is None or self._session is None:
+            return self.async_abort(reason="login_connection_lost")
         target = self._target_entry()
         previous = target.data if target else {}
         errors = {}

@@ -1,5 +1,4 @@
 {
-  "name": "Motorola Nursery Local",
-  "homeassistant": "2026.9.3",
-  "render_readme": true
+  "name": "Motorola Nursery",
+  "homeassistant": "2026.9.3"
 }

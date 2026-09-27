@@ -73,7 +73,10 @@ class FfmpegRelay:
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         task = asyncio.current_task()
-        assert task is not None
+        if task is None:
+            writer.close()
+            await writer.wait_closed()
+            raise RuntimeError("Relay connection has no owning task")
         self._tasks.add(task)
         process: asyncio.subprocess.Process | None = None
         try:
@@ -122,7 +125,8 @@ class FfmpegRelay:
                 stderr=asyncio.subprocess.DEVNULL,
             )
             self._processes.add(process)
-            assert process.stdout is not None
+            if process.stdout is None:
+                raise RuntimeError("FFmpeg output pipe is unavailable")
 
             writer.write(
                 b"HTTP/1.1 200 OK\r\n"

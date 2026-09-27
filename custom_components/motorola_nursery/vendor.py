@@ -5,4 +5,5 @@ The per-device MagicP2P token is still required for camera access.
 """
 
 RTSP_USERNAME = "Pascal"
-RTSP_PASSWORD = "5GenCare.com"
+# Shared application protocol constant, not an account or device secret.
+RTSP_PASSWORD = "5GenCare.com"  # nosec B105
