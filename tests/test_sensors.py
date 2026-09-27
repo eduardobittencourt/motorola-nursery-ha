@@ -51,7 +51,10 @@ async def test_sensor_discovery_outage_recovery_and_unload(hass):
     entry.add_to_hass(hass)
     bridge = Mock(start=AsyncMock(), stop=AsyncMock(), port=12345)
     relay = Mock(start=AsyncMock(), stop=AsyncMock(), url="http://127.0.0.1:12346/test")
-    client = Mock(async_read=AsyncMock(side_effect=TelemetryError("Cloud unavailable")))
+    client = Mock(
+        async_read=AsyncMock(side_effect=TelemetryError("Cloud unavailable")),
+        async_list_songs=AsyncMock(return_value=()),
+    )
     with (
         patch(
             "homeassistant.components.ffmpeg.async_setup", AsyncMock(return_value=True)
