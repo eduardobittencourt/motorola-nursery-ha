@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0 — 2026-09-27
+
+- Add validated controls for night vision, image settings, quality, alert
+  thresholds, sensitivities, alert switches and motion-zone enable states.
+- Add short-step pan/tilt buttons with an unconditional stop and a return-to-origin
+  button for the verified VM65CONNECT command set.
+- Add a camera-side lullaby player with its 20 dynamically discovered built-in
+  tracks, stop control and normalized speaker volume.
+- Confirm quality levels as 160, 480, 640 and 1000 kbit/s and keep the diagnostic
+  bitrate sensor synchronized immediately after changes.
+- Strictly allowlist writable fields, values, playlist names and PTZ commands;
+  firmware, reset, debug shell, storage formatting and song mutation remain blocked.
+- Add synthetic protocol and full Home Assistant service lifecycle tests.
+
 ## 0.3.0 — 2026-09-27
 
 - Add capability-based discovery of 18 read-only sensors/configuration states on

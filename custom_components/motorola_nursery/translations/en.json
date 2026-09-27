@@ -130,6 +130,100 @@
       "motion_zone_4": {
         "name": "Motion zone 4 enabled"
       }
+    },
+    "number": {
+      "video_brightness": {
+        "name": "Image brightness"
+      },
+      "speaker_volume": {
+        "name": "Speaker volume"
+      },
+      "motion": {
+        "name": "Motion sensitivity"
+      },
+      "sound": {
+        "name": "Sound sensitivity"
+      },
+      "temperature_low": {
+        "name": "Low temperature threshold"
+      },
+      "temperature_high": {
+        "name": "High temperature threshold"
+      }
+    },
+    "select": {
+      "night_vision": {
+        "name": "Night vision mode",
+        "state": {
+          "off": "Off",
+          "on": "On",
+          "auto": "Automatic"
+        }
+      },
+      "video_bitrate": {
+        "name": "Video quality",
+        "state": {
+          "160_kbit_s": "160 kbit/s",
+          "480_kbit_s": "480 kbit/s",
+          "640_kbit_s": "640 kbit/s",
+          "1000_kbit_s": "1000 kbit/s"
+        }
+      },
+      "video_light_frequency": {
+        "name": "Power-line frequency",
+        "state": {
+          "50_hz": "50 Hz",
+          "60_hz": "60 Hz"
+        }
+      }
+    },
+    "switch": {
+      "ceiling_mount": {
+        "name": "Invert image"
+      },
+      "low_temperature_alert": {
+        "name": "Low temperature alert"
+      },
+      "high_temperature_alert": {
+        "name": "High temperature alert"
+      },
+      "motion_zones": {
+        "name": "Motion zones"
+      },
+      "motion_zone_1": {
+        "name": "Motion zone 1"
+      },
+      "motion_zone_2": {
+        "name": "Motion zone 2"
+      },
+      "motion_zone_3": {
+        "name": "Motion zone 3"
+      },
+      "motion_zone_4": {
+        "name": "Motion zone 4"
+      }
+    },
+    "button": {
+      "ptz_pan_left": {
+        "name": "Move left"
+      },
+      "ptz_pan_right": {
+        "name": "Move right"
+      },
+      "ptz_tilt_up": {
+        "name": "Move up"
+      },
+      "ptz_tilt_down": {
+        "name": "Move down"
+      },
+      "ptz_origin": {
+        "name": "Return to origin"
+      }
+    },
+    "media_player": {
+      "lullabies": {
+        "name": "Lullabies"
+      }
     }
   }
 }

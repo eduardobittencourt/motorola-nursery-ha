@@ -1,5 +1,27 @@
 # Development status
 
+## Validated controls (0.4.0)
+
+Live reversible tests confirmed every advertised numeric/boolean setting on the
+VM65CONNECT. PTZ left/right/up/down, stop and origin were physically exercised.
+The camera returned 20 built-in lullaby filenames; playback, state reporting,
+stop and volume restoration were confirmed. Quality levels map to 160, 480, 640
+and 1000 kbit/s. The app's microSD getter returned only supported audio fields,
+so storage entities are intentionally omitted.
+
+The write client allowlists fields, checks camera-advertised bounds, requires the
+echoed write and reads settings back. PTZ has a bounded duration and unconditional
+stop. Playlist filenames and selections are validated. The test suite covers HA
+number/select/switch/button/media-player services without contacting the camera.
+
+Version 0.4.0 was then installed on the target Home Assistant after a successful
+configuration check and a component/config-entry backup. After restart, all 42
+registered entities shared the original device: the camera, 18 telemetry mirrors
+and 23 controls. Representative number, select, switch, PTZ and lullaby services
+were exercised through the HA API and their original values restored. The entry
+remained loaded, all telemetry was available, JPEG snapshot and HLS media returned
+HTTP 200, and the logs contained no Motorola integration error.
+
 ## Read-only telemetry (0.3.0)
 
 See [PROTOCOL.md](PROTOCOL.md) for the independently implemented TLS telemetry
@@ -12,7 +34,7 @@ mocked in the lifecycle test; it does not contact a camera or cloud service.
 Live validation on Home Assistant 2026.9.3 found 18 available telemetry entities
 and the original camera on one device, with hardware V1.2.03 and firmware V1.6.37.
 Configuration validation passed. After installing 0.3.0 and restarting HA,
-snapshot and HLS media requests returned HTTP 200. All 37 automated tests and
+snapshot and HLS media requests returned HTTP 200. All 40 automated tests and
 Ruff checks pass. Automatic one-minute polling remained healthy for more than
 40 minutes after deployment, and the HA logs contained no integration errors.
 No camera-setting commands were sent. Multi-day telemetry availability and
@@ -81,8 +103,6 @@ session tokens, codes or device credentials.
 
 ## Remaining validation
 
-- Validate a full HA restart after account linking (the earlier restart used
-  the existing local credentials).
 - Observe long-term session lifetime, rejected-session repair and phone coexistence.
 - Validate recovery under real credential changes, not only synthetic failures.
 - Test other models, regions and multiple cameras/accounts.

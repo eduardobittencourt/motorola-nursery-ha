@@ -20,12 +20,13 @@ Keepalives use `ping`/`pong`; the app also acknowledges `pong` with `pang`.
 
 `caplist` returns `caplist <count>` followed by five fields per capability:
 name, access marker, type, minimum, maximum. The `w` marker means a setting is
-writable by the vendor protocol; it can still be queried with a getter. This
-integration implements **no setters**.
+writable by the vendor protocol; it can still be queried with a getter. Writes
+use `set <name> <value>` and require an echoed response plus a matching readback.
 
 `get <count> <name> ...` returns `get <count> <name> <value> ...`. A complete,
-matching response is required. Only an explicit allowlist of 20 fields is read;
-18 become entities and two update device metadata. Capability metadata is cached
+matching response is required. Only an explicit allowlist of 24 fields is read;
+18 become telemetry entities, two update device metadata, and three describe
+control/playback state. Capability metadata is cached
 after a successful read, rediscovered after a protocol/transport error, and reset
 when the integration reloads. Each poll opens and closes one TLS connection.
 
@@ -51,8 +52,32 @@ advertises 43 capabilities; that does not establish support on other models.
 | `hardware_version`, `firmware_version` | Version strings, displayed in device information. |
 
 The temperature scale was confirmed against the app's conversion and a nearby
-monitor reading. The protocol client was validated with all 20 allowlisted
-values in one request. No state-changing camera command was used during testing.
+monitor reading. The protocol client was validated with all 24 allowlisted
+values in one request.
+
+## Verified controls
+
+All writes below were exercised on the camera and, where applicable, restored to
+their initial values. Numeric and enumerated settings are bounded by the live
+capability metadata before transmission and verified by a subsequent getter.
+
+- `video_brightness`, `speaker_volume`, `motion`, `sound`,
+  `temperature_low` and `temperature_high` are writable numeric settings.
+- `night_vision`, `video_bitrate` and `video_light_frequency` are enumerated
+  settings. Bitrate levels 0, 1, 2 and 3 yielded 160, 480, 640 and 1000 kbit/s.
+- `ceiling_mount`, both temperature-alert switches, the motion-zone master and
+  the four individual zone switches accept 0/1.
+- PTZ uses `set pan left|right`, `set tilt up|down` and a matching `stop`. The
+  integration sends a short pulse and guarantees a stop attempt. Recenter uses
+  `set ptz origin`.
+- `set existsongs 1` returned 20 built-in MP3 names. Playback uses
+  `set playing <name>` and stopping uses `set audio_control 0`; state is exposed
+  by `playing` and `audio_control`. The app also sends `set audio_timer 120`, but
+  this firmware does not acknowledge that command.
+
+The advertised microSD getter returned no storage fields on this camera, so
+storage status and formatting are not integrated. Firmware updates, reset,
+reboot, shell access, song upload/removal and talkback are deliberately excluded.
 
 ## Failure and privacy boundaries
 
@@ -66,6 +91,6 @@ TLS verification is mandatory. Exceptions and diagnostics omit raw messages,
 credentials, account identifiers and camera/network addresses. Diagnostics expose
 only setup/availability flags and the number of recognized capabilities.
 
-A detected sensor state is not proof of physical actuation. Controls, event
-notifications, long-term cloud behavior and other firmware versions need separate
-validation. The local video path remains independent of this telemetry channel.
+A reported setting is not proof of physical actuation. Event notifications,
+long-term cloud behavior and other firmware versions need separate validation.
+The local video path remains independent of this telemetry channel.

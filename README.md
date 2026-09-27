@@ -6,7 +6,7 @@
 Experimental Home Assistant integration for local video from Motorola Nursery
 cameras that use the 5GenCare MagicP2P tunnel. Tested with one VM65.
 
-Version 0.3.0 also provides **read-only sensors through the Motorola cloud**.
+Version 0.4.0 also provides **sensors and controls through the Motorola cloud**.
 Video and audio still travel over the LAN; telemetry requires internet access
 and an account-linked entry. A telemetry outage does not interrupt local video.
 
@@ -21,16 +21,16 @@ On the verified VM65CONNECT, the integration discovers 18 additional entities:
 - Image inversion, motion-zone mode and the four zone enable states.
 
 Hardware and firmware versions appear in the existing device information.
-All settings above are **read-only sensors**, not switches or controls. Motion
-and sound sensitivity are configuration values, not detection events. Zone
-enable states do not mean motion was detected. The configured bitrate is not a
-measurement of current network throughput.
+The sensor entities above remain read-only mirrors; version 0.4.0 adds separate
+control entities for writable settings. Motion and sound sensitivity are
+configuration values, not detection events. Zone enable states do not mean
+motion was detected. The configured bitrate is not a measurement of current
+network throughput.
 
 The sensors share one poll every 60 seconds, use the camera credentials already
 stored in the entry and do not rotate the account session. The client validates
-TLS certificates and sends only authentication, capability discovery, getters
-and keepalives. It never sends camera-setting commands. It does not read Wi-Fi
-names, MAC addresses, sharing information or playlists.
+TLS certificates and sends only allowlisted protocol commands. It does not read
+Wi-Fi names, MAC addresses or sharing information.
 
 Only advertised, supported capabilities become entities. Invalid individual
 values become unavailable. If the cloud is unavailable at startup, the camera
@@ -38,9 +38,30 @@ still loads and sensors appear when telemetry recovers. Existing manual-only
 entries retain local playback; use **Reconfigure > Connect or sign in to the
 Motorola account** to enable sensor discovery.
 
-This release does not expose PTZ, talkback, lullaby playback, firmware updates,
-camera restarts, or motion/sound event sensors. See [PROTOCOL.md](PROTOCOL.md)
-for the verified protocol and compatibility limits.
+## Controls
+
+The verified VM65CONNECT controls include:
+
+- Night vision (off, on or automatic), 50/60 Hz anti-flicker mode and four video
+  quality levels: 160, 480, 640 and 1000 kbit/s.
+- Brightness, speaker volume, motion/sound sensitivity and low/high temperature
+  thresholds.
+- Image inversion, low/high temperature alerts, motion-zone mode and each of the
+  four zone enable states.
+- Short-step pan/tilt buttons and return to origin. Every directional command
+  sends a stop after 0.4 seconds, including when the operation is cancelled.
+- A lullaby media player with 20 camera-advertised built-in tracks, volume and
+  stop controls. Selecting a source starts playback on the camera speaker.
+
+Controls are exposed only for fields advertised by the camera, except PTZ, which
+is limited to VM65 models whose command set was physically validated. Every
+setting write is read back before HA updates its state.
+
+Firmware updates, reset/reboot, debug shell access, storage formatting, song
+upload/removal and arbitrary protocol commands are deliberately blocked. The
+microSD fields used by the app returned no data on the verified camera. Talkback
+and motion/sound event notifications are not yet integrated. See
+[PROTOCOL.md](PROTOCOL.md) for protocol details and compatibility limits.
 
 ## Installation
 

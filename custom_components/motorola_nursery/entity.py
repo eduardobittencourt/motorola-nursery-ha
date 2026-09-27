@@ -1,4 +1,4 @@
-"""Shared identity and availability for read-only telemetry entities."""
+"""Shared identity and availability for telemetry-backed entities."""
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -8,8 +8,8 @@ from .const import DOMAIN
 from .coordinator import MotorolaTelemetryCoordinator
 
 
-class MotorolaTelemetryEntity(CoordinatorEntity[MotorolaTelemetryCoordinator]):
-    """Attach sensors to the existing camera, including imported entries."""
+class MotorolaCoordinatorEntity(CoordinatorEntity[MotorolaTelemetryCoordinator]):
+    """Attach cloud-backed entities to the existing camera device."""
 
     _attr_has_entity_name = True
 
@@ -29,6 +29,10 @@ class MotorolaTelemetryEntity(CoordinatorEntity[MotorolaTelemetryCoordinator]):
             sw_version=values.get("firmware_version"),
             hw_version=values.get("hardware_version"),
         )
+
+
+class MotorolaTelemetryEntity(MotorolaCoordinatorEntity):
+    """A coordinator entity backed by one telemetry value."""
 
     @property
     def available(self) -> bool:

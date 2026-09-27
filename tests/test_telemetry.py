@@ -1,4 +1,4 @@
-"""Synthetic control service: bounded reads, framing, TLS and no setters."""
+"""Synthetic control service: bounded reads, framing, TLS and safe setters."""
 
 import asyncio
 import ssl
@@ -158,3 +158,89 @@ async def test_timeout_and_cancellation_close_connection():
 def test_no_arbitrary_control_host():
     with pytest.raises(Exception, match="Unexpected authentication server"):
         TelemetryClient("example.com", ssl.create_default_context())
+
+
+def make_control_transport(state, commands):
+    reader = asyncio.StreamReader()
+    writer = Mock(drain=AsyncMock(), wait_closed=AsyncMock())
+
+    def write(data):
+        commands.append(data)
+        parts = data.decode().split()
+        response = None
+        if parts[:1] == ["app"]:
+            response = b"app 1 OK\n"
+        elif parts == ["caplist"]:
+            response = (
+                b"caplist 5 video_brightness w int 0 4 playing w str 1 128 "
+                b"audio_control w int 0 1 speaker_volume w int 1 6 "
+                b"wifi_ssid r str 1 64\n"
+            )
+        elif parts[:2] == ["set", "existsongs"]:
+            response = b"set existsongs Twinkle_Little_Star.mp3,White_Noise.mp3\n"
+        elif parts[:2] == ["set", "audio_timer"]:
+            return
+        elif parts[:1] == ["set"]:
+            key, value = parts[1:3]
+            if key in state:
+                state[key] = value
+            response = f"set {key} {value}\n".encode()
+        elif parts[:1] == ["get"]:
+            keys = parts[2:]
+            response = (
+                f"get {len(keys)} "
+                + " ".join(f"{key} {state[key]}" for key in keys)
+                + "\n"
+            ).encode()
+        if response is not None:
+            asyncio.get_running_loop().call_soon(reader.feed_data, response)
+
+    writer.write.side_effect = write
+    return reader, writer
+
+
+async def test_write_playlist_playback_and_ptz_are_strictly_allowlisted():
+    state = {
+        "video_brightness": "1",
+        "playing": "(none)",
+        "audio_control": "0",
+        "speaker_volume": "6",
+    }
+    commands = []
+    transports = [make_control_transport(state, commands) for _ in range(7)]
+    client = TelemetryClient("9.moto.5gencare.com", ssl.create_default_context())
+    with (
+        patch("asyncio.open_connection", AsyncMock(side_effect=transports)),
+        patch("asyncio.sleep", AsyncMock()),
+    ):
+        assert await client.async_set(CREDENTIALS, "video_brightness", 2) == 2
+        assert await client.async_list_songs(CREDENTIALS) == (
+            "Twinkle_Little_Star.mp3",
+            "White_Noise.mp3",
+        )
+        await client.async_play(CREDENTIALS, "White_Noise.mp3")
+        await client.async_stop(CREDENTIALS)
+        await client.async_ptz(CREDENTIALS, "pan", "left")
+        await client.async_ptz(CREDENTIALS, "ptz", "origin")
+
+    assert state["video_brightness"] == "2"
+    assert b"set playing White_Noise.mp3\n" in commands
+    assert b"set audio_timer 120\n" in commands
+    assert b"set audio_control 0\n" in commands
+    assert b"set pan left\n" in commands
+    assert b"set pan stop\n" in commands
+    assert b"set ptz origin\n" in commands
+    assert not any(b"ota_update" in command for command in commands)
+
+
+async def test_rejects_unknown_writes_songs_and_ptz_without_network():
+    client = TelemetryClient("9.moto.5gencare.com", ssl.create_default_context())
+    client._songs = ("White_Noise.mp3",)
+    with patch("asyncio.open_connection", AsyncMock()) as connect:
+        with pytest.raises(TelemetryError, match="Unsupported camera setting"):
+            await client.async_set(CREDENTIALS, "ota_update", 1)
+        with pytest.raises(TelemetryError, match="Unknown camera lullaby"):
+            await client.async_play(CREDENTIALS, "../../private.mp3")
+        with pytest.raises(TelemetryError, match="Unsupported PTZ"):
+            await client.async_ptz(CREDENTIALS, "pan", "origin")
+    connect.assert_not_awaited()

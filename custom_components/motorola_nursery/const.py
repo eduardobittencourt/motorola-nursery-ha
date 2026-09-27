@@ -1,7 +1,16 @@
 """Constants for Motorola Nursery Local."""
 
 DOMAIN = "motorola_nursery"
-PLATFORMS = ["camera", "sensor", "binary_sensor"]
+PLATFORMS = [
+    "camera",
+    "sensor",
+    "binary_sensor",
+    "number",
+    "select",
+    "switch",
+    "button",
+    "media_player",
+]
 
 CONF_SID_USER_ID = "sid_user_id"
 CONF_SID_DEVICE = "sid_device"

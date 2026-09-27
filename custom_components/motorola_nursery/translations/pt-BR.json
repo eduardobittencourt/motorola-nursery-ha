@@ -130,6 +130,100 @@
       "motion_zone_4": {
         "name": "Zona de movimento 4 habilitada"
       }
+    },
+    "number": {
+      "video_brightness": {
+        "name": "Brilho da imagem"
+      },
+      "speaker_volume": {
+        "name": "Volume do alto-falante"
+      },
+      "motion": {
+        "name": "Sensibilidade de movimento"
+      },
+      "sound": {
+        "name": "Sensibilidade de som"
+      },
+      "temperature_low": {
+        "name": "Limite de temperatura baixa"
+      },
+      "temperature_high": {
+        "name": "Limite de temperatura alta"
+      }
+    },
+    "select": {
+      "night_vision": {
+        "name": "Modo de visão noturna",
+        "state": {
+          "off": "Desligada",
+          "on": "Ligada",
+          "auto": "Automática"
+        }
+      },
+      "video_bitrate": {
+        "name": "Qualidade do vídeo",
+        "state": {
+          "160_kbit_s": "160 kbit/s",
+          "480_kbit_s": "480 kbit/s",
+          "640_kbit_s": "640 kbit/s",
+          "1000_kbit_s": "1000 kbit/s"
+        }
+      },
+      "video_light_frequency": {
+        "name": "Frequência da rede elétrica",
+        "state": {
+          "50_hz": "50 Hz",
+          "60_hz": "60 Hz"
+        }
+      }
+    },
+    "switch": {
+      "ceiling_mount": {
+        "name": "Inverter imagem"
+      },
+      "low_temperature_alert": {
+        "name": "Alerta de temperatura baixa"
+      },
+      "high_temperature_alert": {
+        "name": "Alerta de temperatura alta"
+      },
+      "motion_zones": {
+        "name": "Zonas de movimento"
+      },
+      "motion_zone_1": {
+        "name": "Zona de movimento 1"
+      },
+      "motion_zone_2": {
+        "name": "Zona de movimento 2"
+      },
+      "motion_zone_3": {
+        "name": "Zona de movimento 3"
+      },
+      "motion_zone_4": {
+        "name": "Zona de movimento 4"
+      }
+    },
+    "button": {
+      "ptz_pan_left": {
+        "name": "Mover para a esquerda"
+      },
+      "ptz_pan_right": {
+        "name": "Mover para a direita"
+      },
+      "ptz_tilt_up": {
+        "name": "Mover para cima"
+      },
+      "ptz_tilt_down": {
+        "name": "Mover para baixo"
+      },
+      "ptz_origin": {
+        "name": "Retornar à origem"
+      }
+    },
+    "media_player": {
+      "lullabies": {
+        "name": "Canções de ninar"
+      }
     }
   }
 }

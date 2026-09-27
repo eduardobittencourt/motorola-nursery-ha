@@ -1,4 +1,4 @@
-# Home Assistant validation plan — 0.3.0
+# Home Assistant validation plan — 0.4.0
 
 The package contains only custom_components/motorola_nursery. No account
 configuration, capture or research tooling is included.
@@ -27,7 +27,18 @@ configuration, capture or research tooling is included.
 6. Check sanitized diagnostics and logs. Do not force token expiry or alter the
    working account just to exercise an artificial failure.
 7. Do not test audio playback, talkback, PTZ, night-vision writes, firmware updates
-   or camera reboots as part of sensor acceptance. This release has no setters.
+   or camera reboots as part of unattended sensor acceptance.
+
+## Control acceptance while the camera is free
+
+1. Change each number/select/switch once and restore its original value. Confirm
+   the read-only diagnostic entity follows the write on the next poll.
+2. Press each directional PTZ button and confirm movement stops automatically;
+   press Return to origin at the end.
+3. Lower lullaby volume, select one built-in source, confirm playing state, stop,
+   and restore the original volume.
+4. Confirm snapshot and HLS after controls. Do not exercise firmware, reset,
+   storage formatting, debug shell, song upload/removal or arbitrary commands.
 
 ## Rollback
 
