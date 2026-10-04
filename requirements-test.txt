@@ -1,7 +1,7 @@
-homeassistant==2026.9.3
+homeassistant==2026.9.4
 ha-ffmpeg==3.2.2
 PyTurboJPEG==2.5.0
-pytest-homeassistant-custom-component==0.13.366
+pytest-homeassistant-custom-component==0.13.367
 pytest==9.0.3
 pytest-asyncio==1.4.0
 ruff==0.16.9
