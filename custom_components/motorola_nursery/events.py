@@ -15,12 +15,13 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 
 from .auth import credentials_from_data
-from .cloud import atom, vendor_host
+from .cloud import CloudError, atom, vendor_host
 from .const import CONF_SESSION, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 CONTROL_PORT = 2288
+CONNECT_TIMEOUT = 15
 MAX_LINE = 65536
 EVENT_TYPES = {
     "motiondetect": "motion",
@@ -66,6 +67,7 @@ class CameraEventListener:
         self._task: asyncio.Task[None] | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._seen: deque[tuple[str, str]] = deque(maxlen=128)
+        self._retry_delay = 1
 
     async def _send(self, writer: asyncio.StreamWriter, message: str) -> None:
         writer.write(message.encode("ascii") + b"\n")
@@ -97,24 +99,29 @@ class CameraEventListener:
         host = vendor_host(data[CONF_SESSION]["host"])
         token = atom(credentials.magic_token.decode("ascii"))
         owner = atom(str(credentials.sid_user_id))
-        reader, writer = await asyncio.open_connection(
-            host,
-            CONTROL_PORT,
-            ssl=self._context,
-            server_hostname=host,
-            limit=MAX_LINE,
-        )
-        self._writer = writer
+        writer: asyncio.StreamWriter | None = None
         try:
-            await self._send(writer, f"app {owner} {token}")
-            for _ in range(64):
-                response = await self._read(reader, writer)
-                if response[:1] == ["app"]:
-                    if response != ["app", "1", "OK"]:
-                        raise OSError("Camera event authentication unavailable")
-                    break
-            else:
-                raise OSError("Camera event authentication unavailable")
+            # Bound both connection setup and authentication, even if the server
+            # keeps sending keepalives without ever accepting the camera.
+            async with asyncio.timeout(CONNECT_TIMEOUT):
+                reader, writer = await asyncio.open_connection(
+                    host,
+                    CONTROL_PORT,
+                    ssl=self._context,
+                    server_hostname=host,
+                    limit=MAX_LINE,
+                )
+                self._writer = writer
+                await self._send(writer, f"app {owner} {token}")
+                for _ in range(64):
+                    response = await self._read(reader, writer)
+                    if response[:1] == ["app"]:
+                        if response != ["app", "1", "OK"]:
+                            raise OSError("Camera event authentication unavailable")
+                        break
+                else:
+                    raise OSError("Camera event authentication unavailable")
+            self._retry_delay = 1
             self._connection_callback(True)
             while True:
                 parts = await self._read(reader, writer)
@@ -126,27 +133,34 @@ class CameraEventListener:
         finally:
             self._connection_callback(False)
             self._writer = None
-            writer.close()
-            with suppress(OSError, TimeoutError):
-                async with asyncio.timeout(2):
-                    await writer.wait_closed()
+            if writer is not None:
+                writer.close()
+                with suppress(OSError, TimeoutError):
+                    async with asyncio.timeout(2):
+                        await writer.wait_closed()
 
     async def _run(self) -> None:
-        delay = 1
         while True:
             try:
                 await self._listen_once()
-                delay = 1
             except asyncio.CancelledError:
                 raise
-            except (KeyError, OSError, RuntimeError, TimeoutError, ValueError):
+            except (
+                CloudError,
+                KeyError,
+                OSError,
+                RuntimeError,
+                TimeoutError,
+                ValueError,
+            ):
                 self._connection_callback(False)
                 _LOGGER.debug("Camera event channel unavailable; reconnecting")
-                await asyncio.sleep(delay)
-                delay = min(delay * 2, 60)
+                await asyncio.sleep(self._retry_delay)
+                self._retry_delay = min(self._retry_delay * 2, 60)
 
     def start(self) -> None:
         if self._task is None:
+            self._retry_delay = 1
             self._task = asyncio.create_task(self._run())
 
     async def stop(self) -> None:

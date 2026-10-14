@@ -35,8 +35,9 @@ TLS certificates and sends only allowlisted protocol commands. It does not read
 Wi-Fi names, MAC addresses or sharing information.
 
 Only advertised, supported capabilities become entities. Invalid individual
-values become unavailable. If the cloud is unavailable at startup, the camera
-still loads and sensors appear when telemetry recovers. Existing manual-only
+values become unavailable. Initial telemetry and playlist requests run in the
+background so slow cloud responses do not delay local camera startup. If the
+cloud is unavailable, sensors appear when telemetry recovers. Existing manual-only
 entries retain local playback; use **Reconfigure > Connect or sign in to the
 Motorola account** to enable sensor discovery.
 

@@ -36,6 +36,11 @@ class RtspBridge:
         """Apply renewed credentials to new tunnels without touching active ones."""
         self._credentials = credentials
 
+    @property
+    def active_connections(self) -> int:
+        """Return the number of accepted local clients, without their addresses."""
+        return len(self._tasks)
+
     async def start(self) -> None:
         """Start the listener on an ephemeral loopback port."""
         if self._server is not None:
@@ -89,6 +94,7 @@ class RtspBridge:
                 while data := await tunnel.receive():
                     writer.write(data)
                     await writer.drain()
+                raise EOFError("Camera tunnel closed")
 
             directions = {
                 asyncio.create_task(client_to_camera()),
@@ -100,6 +106,9 @@ class RtspBridge:
             for task in pending:
                 task.cancel()
             await asyncio.gather(*done, *pending, return_exceptions=True)
+            # Cleanup must not consume failures that trigger credential recovery.
+            for completed in done:
+                completed.result()
         except asyncio.CancelledError:
             raise
         except (ConnectionError, EOFError, OSError, TimeoutError) as err:

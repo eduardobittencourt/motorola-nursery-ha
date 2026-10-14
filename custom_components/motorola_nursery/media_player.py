@@ -1,5 +1,8 @@
 """Camera-side lullaby playback using its validated built-in playlist."""
 
+import asyncio
+from contextlib import suppress
+
 from homeassistant.components.media_player import (
     MediaPlayerEntity,
     MediaPlayerEntityDescription,
@@ -36,10 +39,30 @@ class MotorolaLullabyPlayer(MotorolaCoordinatorEntity, MediaPlayerEntity):
         self.entity_description = DESCRIPTION
         self._sources: dict[str, str] = {}
         self._loading_sources = False
+        self._entry = entry
+        self._source_task: asyncio.Task[None] | None = None
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        await self._async_load_sources()
+        self._schedule_load_sources()
+
+    async def async_will_remove_from_hass(self) -> None:
+        if self._source_task is not None:
+            self._source_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._source_task
+        await super().async_will_remove_from_hass()
+
+    def _schedule_load_sources(self) -> None:
+        if (
+            self.coordinator.last_update_success
+            and self.coordinator.data is not None
+            and not self._sources
+            and (self._source_task is None or self._source_task.done())
+        ):
+            self._source_task = self._entry.async_create_background_task(
+                self.hass, self._async_load_sources(), "Motorola lullaby playlist"
+            )
 
     async def _async_load_sources(self) -> None:
         if self._sources or self._loading_sources:
@@ -57,12 +80,7 @@ class MotorolaLullabyPlayer(MotorolaCoordinatorEntity, MediaPlayerEntity):
         self.async_write_ha_state()
 
     def _handle_coordinator_update(self) -> None:
-        if (
-            self.coordinator.last_update_success
-            and not self._sources
-            and not self._loading_sources
-        ):
-            self.hass.async_create_task(self._async_load_sources())
+        self._schedule_load_sources()
         super()._handle_coordinator_update()
 
     @property

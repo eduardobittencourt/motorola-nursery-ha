@@ -169,8 +169,14 @@ async def test_diagnostics_excludes_all_account_and_device_data(hass):
         "telemetry_configured",
         "telemetry_available",
         "telemetry_capability_count",
+        "initial_telemetry_pending",
+        "event_channel_connected",
+        "local_bridge_connections",
+        "active_video_processes",
     }
     assert result["account_login_configured"] is True
+    assert result["local_bridge_connections"] == 0
+    assert result["active_video_processes"] == 0
 
 
 @pytest.mark.asyncio

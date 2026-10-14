@@ -37,9 +37,9 @@ def test_notification_parser_filters_camera_and_event_type():
         assert parse_notification(parts, token) is None
 
 
-@pytest.mark.usefixtures("socket_enabled")
-async def test_listener_authenticates_handles_keepalive_and_deduplicates():
-    entry = MockConfigEntry(
+@pytest.fixture
+def event_entry():
+    return MockConfigEntry(
         domain=DOMAIN,
         unique_id="synthetic-device",
         data={
@@ -52,6 +52,10 @@ async def test_listener_authenticates_handles_keepalive_and_deduplicates():
             "cloud_session": {"host": "9.moto.5gencare.com"},
         },
     )
+
+
+@pytest.mark.usefixtures("socket_enabled")
+async def test_listener_authenticates_handles_keepalive_and_deduplicates(event_entry):
     reader = asyncio.StreamReader()
     writer = Mock(drain=AsyncMock(), wait_closed=AsyncMock())
     commands = []
@@ -72,7 +76,7 @@ async def test_listener_authenticates_handles_keepalive_and_deduplicates():
     events = []
     connections = []
     listener = CameraEventListener(
-        entry, ssl.create_default_context(), events.append, connections.append
+        event_entry, ssl.create_default_context(), events.append, connections.append
     )
     with (
         patch(
@@ -89,3 +93,83 @@ async def test_listener_authenticates_handles_keepalive_and_deduplicates():
     assert open_.call_args.kwargs["ssl"] is not None
     assert open_.call_args.kwargs["server_hostname"] == "9.moto.5gencare.com"
     writer.close.assert_called_once()
+
+
+async def test_reconnect_backoff_is_bounded_and_resets_after_authentication(
+    event_entry,
+):
+    reader = asyncio.StreamReader()
+    reader.feed_data(b"app 1 OK\n")
+    reader.feed_eof()
+    writer = Mock(drain=AsyncMock(), wait_closed=AsyncMock())
+    connections = []
+    listener = CameraEventListener(
+        event_entry, ssl.create_default_context(), Mock(), connections.append
+    )
+    delays = []
+
+    async def sleep(delay):
+        delays.append(delay)
+        if len(delays) == 9:
+            raise asyncio.CancelledError
+
+    with (
+        patch(
+            "asyncio.open_connection",
+            AsyncMock(side_effect=[OSError()] * 8 + [(reader, writer)]),
+        ),
+        patch("custom_components.motorola_nursery.events.asyncio.sleep", sleep),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await listener._run()
+    assert delays == [1, 2, 4, 8, 16, 32, 60, 60, 1]
+    assert True in connections
+    writer.close.assert_called_once()
+
+
+@pytest.mark.parametrize("stage", ["connect", "authenticate"])
+async def test_connection_and_authentication_have_a_total_deadline(event_entry, stage):
+    reader = asyncio.StreamReader()
+    writer = Mock(drain=AsyncMock(), wait_closed=AsyncMock())
+
+    async def connect(*args, **kwargs):
+        if stage == "connect":
+            await asyncio.Future()
+        reader.feed_data(b"ping\npong\n")
+        return reader, writer
+
+    connections = []
+    listener = CameraEventListener(
+        event_entry, ssl.create_default_context(), Mock(), connections.append
+    )
+    with (
+        patch("asyncio.open_connection", connect),
+        patch("custom_components.motorola_nursery.events.CONNECT_TIMEOUT", 0.01),
+        pytest.raises(TimeoutError),
+    ):
+        await asyncio.wait_for(listener._listen_once(), 1)
+    assert connections == [False]
+    assert listener._writer is None
+    assert writer.close.call_count == (stage == "authenticate")
+
+
+async def test_stop_cancels_inflight_authentication_and_closes_socket(event_entry):
+    reader = asyncio.StreamReader()
+    writer = Mock(drain=AsyncMock(), wait_closed=AsyncMock())
+    started = asyncio.Event()
+    writer.write.side_effect = lambda _: started.set()
+    listener = CameraEventListener(
+        event_entry, ssl.create_default_context(), Mock(), Mock()
+    )
+    with patch("asyncio.open_connection", AsyncMock(return_value=(reader, writer))):
+        listener.start()
+        task = listener._task
+        listener.start()
+        assert listener._task is task
+        await asyncio.wait_for(started.wait(), 1)
+        await asyncio.wait_for(listener.stop(), 1)
+        await listener.stop()
+    assert task.cancelled()
+    assert listener._task is None
+    assert listener._writer is None
+    writer.close.assert_called()
