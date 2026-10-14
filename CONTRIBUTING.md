@@ -23,6 +23,10 @@ python3.14 -m venv .venv
 .venv/bin/pip install -r requirements-test.txt
 ```
 
+The pinned HA test plugin selects compatible Home Assistant, pytest,
+pytest-asyncio and coverage versions. Update that plugin rather than adding
+independent pins for those packages; see [DEVELOPMENT.md](DEVELOPMENT.md).
+
 Run the complete local validation before opening a pull request:
 
 ```sh

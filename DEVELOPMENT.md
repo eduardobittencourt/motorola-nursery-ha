@@ -65,6 +65,11 @@ HTTP 200 again after account linking.
 
 Use Python 3.14 and a virtual environment:
 
+The pinned Home Assistant test plugin currently selects Home Assistant
+2026.10.1 and compatible versions of pytest, pytest-asyncio and coverage. Those
+packages are intentionally not pinned a second time in `requirements-test.txt`.
+The integration's minimum supported Home Assistant remains 2026.9.3.
+
 ```sh
 python3.14 -m venv .venv
 .venv/bin/pip install -r requirements-test.txt

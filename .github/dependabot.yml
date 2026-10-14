@@ -4,11 +4,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    # pytest-homeassistant-custom-component pins these exactly; Dependabot must
-    # update them only as part of that package's own compatible release.
-    ignore:
-      - dependency-name: coverage
-      - dependency-name: pytest
     groups:
       test-dependencies:
         patterns: ["*"]
@@ -16,3 +11,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      codeql:
+        patterns: ["github/codeql-action/*"]
