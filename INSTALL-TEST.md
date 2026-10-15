@@ -1,4 +1,4 @@
-# Home Assistant validation plan — 0.5.0
+# Home Assistant validation plan — 0.5.1
 
 The package contains only custom_components/motorola_nursery. No account
 configuration, capture or research tooling is included.

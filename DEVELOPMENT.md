@@ -1,5 +1,32 @@
 # Development status
 
+## Reliability candidate (0.5.1)
+
+The expanded synthetic suite passes 54 tests with 88% line coverage on both
+Home Assistant 2026.9.3 and 2026.10.1. It covers active forwarding failures,
+camera EOF versus viewer disconnects, bounded event reconnects, authentication
+deadlines and cancellation of slow telemetry/playlist requests during unload.
+
+On the target HA 2026.10.1, an isolated HA process using the real VM65CONNECT
+loaded the candidate in about 0.2 seconds, read 24 telemetry fields and connected
+the event channel. Telemetry and events recovered after entry reload; unload
+left no relay process or bridge connection, with no integration errors. Account
+renewal and control actions were disabled in this acceptance process, and the
+production config entry data remained unchanged.
+
+The candidate relay delivered real MPEG-TS data. Native snapshot/HLS acceptance
+in the auxiliary process did not complete: the stream worker encountered I/O
+failures and camera resets while the primary instance remained active. The cause
+is not established. The primary instance returned HTTP 200 with a valid JPEG.
+The candidate has not been activated in the primary instance; full media
+acceptance there and live credential recovery remain pending.
+
+An auxiliary HA process inside HAOS must use a separate config directory and
+remove every `SUPERVISOR*` and `HASSIO*` environment variable before loading HA,
+including `SUPERVISOR_CORE_API_SOCKET`. Load only the required integrations and
+verify that `hassio` is absent. Otherwise the auxiliary instance can publish its
+own API port to the real Supervisor and trigger a watchdog restart of primary HA.
+
 ## Validated controls (0.4.0)
 
 Live reversible tests confirmed every advertised numeric/boolean setting on the
