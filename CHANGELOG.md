@@ -13,6 +13,8 @@
   run CI against both minimum-supported and current Home Assistant versions.
 - Update compatible test dependencies and CodeQL together, and prevent
   conflicting dependency pins and separate CodeQL action updates.
+- Consolidate contributor/testing guidance and remove development-session diaries
+  from the maintained documentation.
 
 ## 0.5.0 — 2026-09-27
 

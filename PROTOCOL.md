@@ -1,4 +1,4 @@
-# Verified VM65CONNECT telemetry
+# Motorola Nursery protocol
 
 The runtime client is independently implemented in `telemetry.py`. This document
 records interoperability facts, not vendor code. No APK, native library,
@@ -12,6 +12,28 @@ login on port 3388 and local MagicP2P video on camera port 77/internal port 6667
 No working local telemetry endpoint has been verified. In particular, the Hubble
 HTTP getter path did not return telemetry on this VM65.
 
+### Account access
+
+The account client uses certificate-verified TLS on port 3388, initially at
+`9.moto.5gencare.com`. It handles newline-framed ASCII messages and idle
+`ping`/`pong`, including while the user enters the email code.
+
+- `v3_otp`: submit a fresh 32-character uppercase alphanumeric client identity,
+  email address and six-digit code length; obtain user ID and routing host.
+- `v3_loginset`: submit that identity, email and received code; obtain a session.
+- `v3_session`: resume with user ID, token and session ID. The replacement token
+  must be saved before any subsequent network operation, including device listing.
+- `v3_dlist`: retrieve a count followed by seven fields per device, including
+  tunnel credentials and a URL-encoded display name.
+
+HA writes config-entry storage asynchronously. A sudden process or power loss
+during session rotation can require reauthentication. The local access token is
+SHA-1 of the camera magic token concatenated with the VM65 application's shared
+RTSP password, as required by the vendor protocol. Imported RTSP overrides are
+preserved; unused login and device fields are not interpreted.
+
+### Camera telemetry and events
+
 Messages are ASCII lines terminated with LF. TCP may split or combine lines.
 Authenticate with `app <owner-id> <camera-magic-token>`; the observed acceptance
 is `app 1 OK`. These are saved per-camera credentials, not a new account login.
@@ -24,6 +46,8 @@ types are `motiondetect`, `sounddetect` and `sounddetect2`. The integration
 validates the token and exact frame shape, maps both sound variants to one sound
 event, and never stores or exposes the opaque event name. A bounded in-memory
 fingerprint cache suppresses replayed notifications after reconnects.
+Connection setup and authentication share a 15-second deadline. Reconnect delay
+increases from one to at most 60 seconds and resets after authentication.
 
 `caplist` returns `caplist <count>` followed by five fields per capability:
 name, access marker, type, minimum, maximum. The `w` marker means a setting is
@@ -32,8 +56,8 @@ use `set <name> <value>` and require an echoed response plus a matching readback
 
 `get <count> <name> ...` returns `get <count> <name> <value> ...`. A complete,
 matching response is required. Only an explicit allowlist of 24 fields is read;
-18 become telemetry entities, two update device metadata, and three describe
-control/playback state. Capability metadata is cached
+Telemetry fields become entities, version fields update device metadata, and
+other fields support controls/playback. Capability metadata is cached
 after a successful read, rediscovered after a protocol/transport error, and reset
 when the integration reloads. Each poll opens and closes one TLS connection.
 
@@ -96,7 +120,8 @@ account renewal. The next scheduled poll retries with current saved credentials.
 
 TLS verification is mandatory. Exceptions and diagnostics omit raw messages,
 credentials, account identifiers and camera/network addresses. Diagnostics expose
-only setup/availability flags and the number of recognized capabilities.
+only setup/availability flags, the number of recognized capabilities, and local
+connection/process counts.
 
 A reported setting is not proof of physical actuation. Motion and sound notify
 frames are implemented from the verified vendor protocol; physical detection

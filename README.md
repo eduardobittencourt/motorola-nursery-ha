@@ -136,21 +136,21 @@ email code always requires submitting the email form.
 
 ## Validation and limits
 
-- The earlier manual integration produced 1920x1080 HLS with AAC mono audio
-  and survived a Home Assistant restart.
-- Independent email-code login, device retrieval, session rotation and local
-  RTSP access were verified against one VM65 account outside Home Assistant.
-- This account-enabled development version has automated tests against Home
-  Assistant 2026.9.3. On the target HA, the existing camera survived the upgrade
-  and restart. Email-code login through the HA UI succeeded, the session was
-  saved, and snapshot/HLS returned HTTP 200 after account linking.
-  Long-term credential recovery still requires live validation.
+- Compatibility has been tested with one VM65CONNECT, hardware V1.2.03 and
+  firmware V1.6.37. Local snapshot/HLS with H.264 video and AAC mono audio,
+  email-code login, telemetry and controls have been verified on this model.
+- Automated tests use real Home Assistant lifecycle/config-flow infrastructure
+  with synthetic camera/cloud responses. CI covers minimum-supported and current
+  HA test environments; see [CONTRIBUTING.md](CONTRIBUTING.md).
+- Recovery after real credential changes and concurrent streaming from multiple
+  HA instances remain unverified.
 - Long-term session expiry, other regions/models, account sharing and concurrent
   phone sessions remain unverified. Camera address discovery is not implemented.
 - Recovery checks the tunnel handshake; rejection by the camera's internal RTSP
   service alone is not currently a renewal trigger.
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for testing and protocol details.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development and testing, and
+[PROTOCOL.md](PROTOCOL.md) for interoperability details.
 
 ## Support and security
 
