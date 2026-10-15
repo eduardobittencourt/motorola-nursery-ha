@@ -1,5 +1,5 @@
 # Shared tools for current and minimum-supported HA test environments.
 ha-ffmpeg==3.2.2
 PyTurboJPEG==2.5.0
-ruff==0.16.10
+ruff==0.17.0
 bandit==1.9.4
