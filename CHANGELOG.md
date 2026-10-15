@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.1 — Unreleased
+
+- Recover from camera tunnel errors and EOF during an active video stream while
+  keeping ordinary local viewer disconnects quiet.
+- Reset event reconnection backoff after authentication and bound connection
+  setup and authentication with a shared deadline.
+- Load initial telemetry and lullaby playlists in the background so cloud
+  delays do not hold up local camera startup; cancel pending work on unload.
+- Add privacy-safe event connection and video process counters to diagnostics.
+- Cover transport failures, reconnects, slow cloud requests and cancellation;
+  run CI against both minimum-supported and current Home Assistant versions.
+- Update compatible test dependencies and CodeQL together, and prevent
+  conflicting dependency pins and separate CodeQL action updates.
+- Consolidate contributor/testing guidance and remove development-session diaries
+  from the maintained documentation.
+
 ## 0.5.0 — 2026-09-27
 
 - Add real-time motion and sound detection over the camera's authenticated,

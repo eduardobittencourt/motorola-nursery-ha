@@ -1,9 +1,4 @@
-homeassistant==2026.9.3
-ha-ffmpeg==3.2.2
-PyTurboJPEG==2.5.0
-pytest-homeassistant-custom-component==0.13.366
-pytest==9.0.3
-pytest-asyncio==1.4.0
-ruff==0.16.9
-bandit==1.9.4
-coverage==7.15.4
+# The HA test plugin pins Home Assistant, pytest, pytest-asyncio and coverage.
+# Keep those versions owned by the plugin to avoid conflicting direct pins.
+-r requirements-test-tools.txt
+pytest-homeassistant-custom-component==0.13.372

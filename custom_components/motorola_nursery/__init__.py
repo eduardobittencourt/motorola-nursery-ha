@@ -52,6 +52,7 @@ class RuntimeData:
     recovery_task: asyncio.Task | None = None
     stopping: bool = False
     telemetry: MotorolaTelemetryCoordinator | None = None
+    telemetry_task: asyncio.Task[None] | None = None
     events: MotorolaEventManager | None = None
 
     async def async_prepare_stream(self, *, force: bool = False) -> None:
@@ -110,6 +111,10 @@ class RuntimeData:
 
     async def async_stop(self) -> None:
         self.stopping = True
+        if self.telemetry_task is not None:
+            self.telemetry_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self.telemetry_task
         if self.telemetry is not None:
             await self.telemetry.async_shutdown()
         if self.events is not None:
@@ -157,11 +162,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             context = await hass.async_add_executor_job(ssl.create_default_context)
             client = TelemetryClient(entry.data[CONF_SESSION]["host"], context)
             runtime.telemetry = MotorolaTelemetryCoordinator(hass, entry, client)
-            # A cloud outage must not prevent the local camera from loading.
-            await runtime.telemetry.async_refresh()
             runtime.events = MotorolaEventManager(hass, entry, context)
-            runtime.events.start()
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        # Register the camera and delayed-discovery listeners before any cloud
+        # request. Background refresh cannot hold up HA or local video startup.
+        if runtime.telemetry is not None:
+            runtime.telemetry_task = entry.async_create_background_task(
+                hass, runtime.telemetry.async_refresh(), "Motorola initial telemetry"
+            )
+        if runtime.events is not None:
+            runtime.events.start()
     except BaseException:
         if runtime is not None:
             await runtime.async_stop()
