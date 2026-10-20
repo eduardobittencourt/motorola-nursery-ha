@@ -90,12 +90,7 @@ is disconnected; local video remains independent.
 
 Requires Home Assistant 2026.9.3 or newer.
 
-Until the repository is included in the default HACS catalog, add it as a
-custom repository:
-
-1. Open HACS, choose **Custom repositories**, and enter
-   `https://github.com/eduardobittencourt/motorola-nursery-ha` as an
-   **Integration**.
+1. Open HACS and search for **Motorola Nursery**.
 2. Download **Motorola Nursery** and restart Home Assistant.
 3. Open **Settings > Devices & services > Add integration**.
 

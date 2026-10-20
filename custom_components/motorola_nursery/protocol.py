@@ -141,6 +141,30 @@ class MagicP2PTunnel:
         self._writer = writer
         self._encoder = MagicCipher(token)
         self._decoder = MagicCipher(token)
+        self._send_lock = asyncio.Lock()
+        self._receive_lock = asyncio.Lock()
+
+    async def _transform(
+        self, cipher: MagicCipher, data: bytes, *, encode: bool
+    ) -> bytes:
+        """Finish executor work before releasing the direction's lock."""
+        transform = cipher.encode if encode else cipher.decode
+        future = asyncio.get_running_loop().run_in_executor(None, transform, data)
+        cancelled = False
+        while True:
+            try:
+                result = await asyncio.shield(future)
+                break
+            except asyncio.CancelledError:
+                if future.cancelled():
+                    raise
+                # Cancelling an await cannot stop a running worker. Keep the
+                # state protected until it finishes, even on repeated cancels.
+                self._writer.close()
+                cancelled = True
+        if cancelled:
+            raise asyncio.CancelledError
+        return result
 
     @classmethod
     async def connect(
@@ -174,15 +198,24 @@ class MagicP2PTunnel:
 
     async def send(self, data: bytes) -> None:
         """Encode and forward plaintext bytes to the camera."""
-        self._writer.write(self._encoder.encode(data))
-        await self._writer.drain()
+        async with self._send_lock:
+            if self._writer.is_closing():
+                raise ConnectionError("Camera tunnel is closed")
+            encrypted = await self._transform(self._encoder, data, encode=True)
+            self._writer.write(encrypted)
+            await self._writer.drain()
 
     async def receive(self) -> bytes:
         """Receive and decode at least one plaintext chunk."""
-        while encrypted := await self._reader.read(65536):
-            if plain := self._decoder.decode(encrypted):
-                return plain
-        return b""
+        async with self._receive_lock:
+            if self._writer.is_closing():
+                raise ConnectionError("Camera tunnel is closed")
+            while encrypted := await self._reader.read(65536):
+                if plain := await self._transform(
+                    self._decoder, encrypted, encode=False
+                ):
+                    return plain
+            return b""
 
     async def close(self) -> None:
         """Close the camera transport."""

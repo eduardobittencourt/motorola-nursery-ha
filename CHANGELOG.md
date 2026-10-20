@@ -1,7 +1,10 @@
 # Changelog
 
-## 0.5.1 — Unreleased
+## 0.5.1 — 2026-10-20
 
+- Transform camera stream chunks in executor workers instead of blocking the
+  event loop, keeping cipher state and transport operations ordered per direction.
+- Lead installation instructions with searching for Motorola Nursery in HACS.
 - Recover from camera tunnel errors and EOF during an active video stream while
   keeping ordinary local viewer disconnects quiet.
 - Reset event reconnection backoff after authentication and bound connection

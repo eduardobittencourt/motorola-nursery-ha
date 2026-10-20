@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import sys
+import threading
 import unittest
 from pathlib import Path
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -115,6 +117,109 @@ class TunnelTest(unittest.IsolatedAsyncioTestCase):
             await server.wait_closed()
         self.assertEqual(received, [b"OPTIONS rtsp://camera/ RTSP/1.0\r\n\r\n"])
         self.assertEqual(requested_ports, [b"08080"])
+
+
+@pytest.mark.parametrize("direction", ["send", "receive"])
+async def test_transforms_run_off_loop_and_preserve_chunk_order(direction) -> None:
+    """A blocked transform must leave the loop and other direction usable."""
+    token = b"test-token"
+    encoder = protocol.MagicCipher(token)
+    chunks = [b"first" * 13108, b"second" * 100]
+    reader = Mock(read=AsyncMock(side_effect=[encoder.encode(c) for c in chunks]))
+    writer = Mock(drain=AsyncMock(), is_closing=Mock(return_value=False))
+    tunnel = protocol.MagicP2PTunnel(reader, writer, token)
+    cipher = tunnel._encoder if direction == "send" else tunnel._decoder
+    method = "encode" if direction == "send" else "decode"
+    transform = getattr(cipher, method)
+    loop = asyncio.get_running_loop()
+    loop_thread = threading.get_ident()
+    started = asyncio.Event()
+    release = threading.Event()
+    calls = []
+
+    def blocked_transform(data):
+        assert threading.get_ident() != loop_thread
+        calls.append(data)
+        if len(calls) == 1:
+            loop.call_soon_threadsafe(started.set)
+            assert release.wait(5)
+        return transform(data)
+
+    setattr(cipher, method, blocked_transform)
+
+    async def transfer(chunk):
+        if direction == "send":
+            return await tunnel.send(chunk)
+        return await tunnel.receive()
+
+    first = asyncio.create_task(transfer(chunks[0]))
+    second = None
+    try:
+        await asyncio.wait_for(started.wait(), 2)
+        second = asyncio.create_task(transfer(chunks[1]))
+        await asyncio.sleep(0)
+        assert len(calls) == 1
+        assert not first.done() and not second.done()
+        # Full duplex still works while one direction's worker is blocked.
+        if direction == "send":
+            assert await asyncio.wait_for(tunnel.receive(), 2) == chunks[0]
+        else:
+            await asyncio.wait_for(tunnel.send(b"request"), 2)
+    finally:
+        release.set()
+        results = await asyncio.gather(first, *([second] if second else []))
+    if direction == "send":
+        decoder = protocol.MagicCipher(token)
+        assert [
+            decoder.decode(c.args[0]) for c in writer.write.call_args_list
+        ] == chunks
+    else:
+        assert results == chunks
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("direction", ["send", "receive"])
+async def test_cancelled_transform_finishes_before_releasing_state(direction) -> None:
+    """Cancellation closes the tunnel and waits for its running worker."""
+    reader = Mock(read=AsyncMock(return_value=b"encrypted"))
+    writer = Mock(drain=AsyncMock(), is_closing=Mock(return_value=False))
+    writer.close.side_effect = lambda: setattr(writer.is_closing, "return_value", True)
+    tunnel = protocol.MagicP2PTunnel(reader, writer, b"test-token")
+    loop = asyncio.get_running_loop()
+    started = asyncio.Event()
+    release = threading.Event()
+
+    def blocked_transform(data):
+        loop.call_soon_threadsafe(started.set)
+        assert release.wait(5)
+        return b"transformed"
+
+    if direction == "send":
+        tunnel._encoder.encode = blocked_transform
+        task = asyncio.create_task(tunnel.send(b"plain"))
+        lock = tunnel._send_lock
+    else:
+        tunnel._decoder.decode = blocked_transform
+        task = asyncio.create_task(tunnel.receive())
+        lock = tunnel._receive_lock
+    try:
+        await asyncio.wait_for(started.wait(), 2)
+        for _ in range(2):
+            task.cancel()
+            await asyncio.sleep(0)
+            assert not task.done()
+            assert lock.locked()
+        writer.close.assert_called()
+        writer.write.assert_not_called()
+    finally:
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert not lock.locked()
+    with pytest.raises(ConnectionError, match="closed"):
+        await tunnel.send(b"more")
+    with pytest.raises(ConnectionError, match="closed"):
+        await tunnel.receive()
 
 
 if __name__ == "__main__":
