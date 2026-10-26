@@ -1,14 +1,12 @@
 # Motorola Nursery for Home Assistant
 
 [![Validate](https://github.com/eduardobittencourt/motorola-nursery-ha/actions/workflows/validate.yml/badge.svg)](https://github.com/eduardobittencourt/motorola-nursery-ha/actions/workflows/validate.yml)
-[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=eduardobittencourt&repository=motorola-nursery-ha&category=integration)
+[![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=eduardobittencourt&repository=motorola-nursery-ha&category=integration)
 
 Community Home Assistant integration for Motorola Nursery cameras that use the
 5GenCare MagicP2P tunnel. It provides local video plus optional cloud-backed
 telemetry, controls, and detection events. Tested with one VM65CONNECT.
 
-Version 0.5.0 also provides **sensors, controls and real-time detection events
-through the Motorola cloud**.
 Video and audio still travel over the LAN; telemetry requires internet access
 and an account-linked entry. A telemetry outage does not interrupt local video.
 
@@ -23,8 +21,8 @@ On the verified VM65CONNECT, the integration discovers 18 additional entities:
 - Image inversion, motion-zone mode and the four zone enable states.
 
 Hardware and firmware versions appear in the existing device information.
-The sensor entities above remain read-only mirrors; version 0.4.0 adds separate
-control entities for writable settings. Motion and sound sensitivity are
+The sensor entities above remain read-only mirrors; separate control entities
+provide writable settings. Motion and sound sensitivity are
 configuration values, not detection events. Zone enable states do not mean
 motion was detected. The configured bitrate is not a measurement of current
 network throughput.
@@ -63,8 +61,8 @@ setting write is read back before HA updates its state.
 Firmware updates, reset/reboot, debug shell access, storage formatting, song
 upload/removal and arbitrary protocol commands are deliberately blocked. The
 microSD fields used by the app returned no data on the verified camera. Talkback
-is not yet integrated. See
-[PROTOCOL.md](PROTOCOL.md) for protocol details and compatibility limits.
+is not yet integrated. See the [protocol reference](docs/protocol.md) for
+protocol details and compatibility limits.
 
 ## Motion and sound detections
 
@@ -90,9 +88,14 @@ is disconnected; local video remains independent.
 
 Requires Home Assistant 2026.9.3 or newer.
 
+Motorola Nursery is included in the default HACS catalog; no custom repository
+is needed. [Open Motorola Nursery in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=eduardobittencourt&repository=motorola-nursery-ha&category=integration)
+or follow these steps:
+
 1. Open HACS and search for **Motorola Nursery**.
 2. Download **Motorola Nursery** and restart Home Assistant.
-3. Open **Settings > Devices & services > Add integration**.
+3. Open **Settings > Devices & services > Add integration > Motorola Nursery**
+   and follow the account setup below.
 
 For manual installation, copy `custom_components/motorola_nursery` into the
 Home Assistant configuration directory and restart Home Assistant.
@@ -144,8 +147,9 @@ email code always requires submitting the email form.
 - Recovery checks the tunnel handshake; rejection by the camera's internal RTSP
   service alone is not currently a renewal trigger.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development and testing, and
-[PROTOCOL.md](PROTOCOL.md) for interoperability details.
+See the [documentation index](docs/README.md) for protocol details,
+development, testing and release maintenance. Contribution guidelines are in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Support and security
 
@@ -166,4 +170,4 @@ included solely to construct its local stream credentials.
 
 Motorola and the Motorola logo are trademarks of Motorola Trademark Holdings,
 LLC. Brand artwork is used only to identify compatible products; see
-[BRAND_ASSETS.md](BRAND_ASSETS.md).
+[brand assets](docs/brand-assets.md).
