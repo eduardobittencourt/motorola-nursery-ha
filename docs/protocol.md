@@ -1,18 +1,44 @@
 # Motorola Nursery protocol
 
-The runtime client is independently implemented in `telemetry.py`. This document
-records interoperability facts, not vendor code. No APK, native library,
-decompiled source, private capture, device identifier or credential is included.
+[Documentation index](README.md) · [Development and maintenance](development.md)
 
-## Transport and authentication
+This reference records interoperability facts and their compatibility limits.
+The independent implementation lives in
+[`protocol.py`](../custom_components/motorola_nursery/protocol.py) (local tunnel),
+[`cloud.py`](../custom_components/motorola_nursery/cloud.py) (account access),
+[`telemetry.py`](../custom_components/motorola_nursery/telemetry.py) (settings and
+controls) and [`events.py`](../custom_components/motorola_nursery/events.py)
+(detection notifications). No APK, native library, decompiled source, private
+capture, device identifier or credential is included.
 
-The app's camera-control channel uses certificate-verified TLS on port 2288 of
-the account's routed `*.moto.5gencare.com` server. This is separate from account
-login on port 3388 and local MagicP2P video on camera port 77/internal port 6667.
-No working local telemetry endpoint has been verified. In particular, the Hubble
-HTTP getter path did not return telemetry on this VM65.
+## Transports
 
-### Account access
+The camera exposes local video separately from the cloud services used by the
+integration:
+
+| Path | Connection | Purpose |
+| --- | --- | --- |
+| Local video | Camera TCP 77, tunneled to internal RTSP 6667 | Snapshots and HLS playback. |
+| Account access | Certificate-verified TLS on vendor TCP 3388 | Email-code login, session resumption and device listing. |
+| Camera data | Certificate-verified TLS on the account's routed `*.moto.5gencare.com` server, TCP 2288 | Telemetry, settings, controls and detection events. |
+
+### Local video
+
+The MagicP2P handshake requests an internal target port and authenticates with
+an SID derived from the saved camera credentials. A successful handshake is
+followed by the stateful byte transform implemented by `MagicCipher`; send and
+receive maintain separate cipher states. Each chunk is transformed in an
+executor worker, with a lock per direction to preserve ordering. Cancellation
+closes the tunnel and waits for the transform before releasing its state.
+
+The integration uses internal RTSP port 6667. A loopback-only RTSP bridge feeds
+an on-demand FFmpeg relay, which copies H.264 video and converts PCMA audio to
+AAC for Home Assistant's native Stream integration. Both listeners bind to
+`127.0.0.1` on ephemeral ports. The relay's HTTP path contains a random token.
+See [development and maintenance](development.md#development-setup) for module
+responsibilities.
+
+## Account access
 
 The account client uses certificate-verified TLS on port 3388, initially at
 `9.moto.5gencare.com`. It handles newline-framed ASCII messages and idle
@@ -32,7 +58,7 @@ SHA-1 of the camera magic token concatenated with the VM65 application's shared
 RTSP password, as required by the vendor protocol. Imported RTSP overrides are
 preserved; unused login and device fields are not interpreted.
 
-### Camera telemetry and events
+## Camera telemetry and events
 
 Messages are ASCII lines terminated with LF. TCP may split or combine lines.
 Authenticate with `app <owner-id> <camera-magic-token>`; the observed acceptance
@@ -56,7 +82,7 @@ use `set <name> <value>` and require an echoed response plus a matching readback
 
 `get <count> <name> ...` returns `get <count> <name> <value> ...`. A complete,
 matching response is required. Only an explicit allowlist of 24 fields is read;
-Telemetry fields become entities, version fields update device metadata, and
+telemetry fields become entities, version fields update device metadata, and
 other fields support controls/playback. Capability metadata is cached
 after a successful read, rediscovered after a protocol/transport error, and reset
 when the integration reloads. Each poll opens and closes one TLS connection.
@@ -110,13 +136,33 @@ The advertised microSD getter returned no storage fields on this camera, so
 storage status and formatting are not integrated. Firmware updates, reset,
 reboot, shell access, song upload/removal and talkback are deliberately excluded.
 
+## Local telemetry investigation
+
+Read-only probes on 2026-10-09 used one VM65CONNECT, hardware V1.2.03,
+firmware V1.6.37. They did not establish a local telemetry or detection-event
+API:
+
+- Authenticated RTSP `GET_PARAMETER` requests for `temperature_reading` and
+  `wifi_signal` returned 200 with an empty body.
+- An HTTP service on internal port 9090 responded through MagicP2P. Tested
+  getter paths, including the Hubble-style temperature getter, returned 404 or
+  timed out. No working telemetry response was obtained.
+- A successful `ok 0 dconn` handshake could be followed by reset or EOF. Tunnel
+  authentication alone does not establish that an internal service is usable.
+
+These observations apply to the tested requests and firmware; they do not
+exclude other local APIs. Port 9090 is not exposed by the integration's RTSP
+bridge. The integration continues to use the cloud channel for telemetry and
+notifications. No camera settings were written during those probes, and
+internet access was not blocked, so they do not establish offline telemetry.
+
 ## Failure and privacy boundaries
 
-Reads have a 15-second overall deadline, a 64 KiB line limit, validated counts,
-duplicate-key rejection and bounded unrelated-message handling. An invalid
+Telemetry reads have a 15-second overall deadline, a 64 KiB line limit,
+validated counts, duplicate-key rejection and bounded unrelated-message handling. An invalid
 individual value is unavailable; malformed/incomplete responses fail the poll.
-Connection errors never reset the camera, reload the integration or invoke
-account renewal. The next scheduled poll retries with current saved credentials.
+Telemetry connection errors never reset the camera, reload the integration or
+invoke account renewal. The next scheduled poll retries with current saved credentials.
 
 TLS verification is mandatory. Exceptions and diagnostics omit raw messages,
 credentials, account identifiers and camera/network addresses. Diagnostics expose
