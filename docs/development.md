@@ -59,6 +59,25 @@ particular, check that cloud failures preserve local video, delayed discovery
 creates no duplicate entities, viewer disconnects do not trigger credential
 recovery, and unload closes clients, background tasks and FFmpeg processes.
 
+## Dependency pull requests
+
+Dependabot updates for pip and GitHub Actions are eligible for squash auto-merge,
+including major updates. The privileged `dependabot-automerge.yml` workflow only
+enables GitHub's native auto-merge for non-draft Dependabot PRs originating in this
+repository; it never checks out or executes PR code.
+
+The `Protect main` repository ruleset requires an up-to-date branch, passing HACS,
+Hassfest, both HA test environments, both CodeQL analyses, the CodeQL result and
+CodeRabbit, resolved review conversations, and one approving review. CodeRabbit
+is configured to review Dependabot PRs and automatically approve after its feedback
+is resolved and the latest commit is reviewed. Missing or failing required checks
+block merging. There are no bypass actors. These merge requirements apply to all
+PRs; automatic enabling of auto-merge is limited to Dependabot.
+
+The required check names and application bindings live in GitHub repository
+settings. Keep them aligned when adding or renaming CI jobs. If a dependency PR
+falls behind `main`, update its branch and wait for checks and review again.
+
 ## HACS distribution and releases
 
 The repository is included in the [default HACS catalog](https://github.com/hacs/default/blob/master/integration).
