@@ -67,6 +67,25 @@ particular, check that cloud failures preserve local video, delayed discovery
 creates no duplicate entities, viewer disconnects do not trigger credential
 recovery, and unload closes clients, background tasks and FFmpeg processes.
 
+## HACS distribution and releases
+
+The repository is included in the [default HACS catalog](https://github.com/hacs/default/blob/master/integration).
+Users can find Motorola Nursery in HACS without adding a custom repository.
+
+Keep HACS and Hassfest validation enabled without ignored checks. The scheduled
+validation also checks for changes in upstream requirements.
+
+For a release, update `custom_components/motorola_nursery/manifest.json` and
+`CHANGELOG.md`, let validation pass for the release commit, then publish a GitHub
+release with a matching version tag (`vX.Y.Z` for manifest version `X.Y.Z`).
+[HACS uses published releases](https://www.hacs.xyz/docs/publish/start/#versions);
+pushing a tag alone does not publish an update. Normal releases do not require
+another catalog submission.
+
+When changing the minimum Home Assistant version, keep `hacs.json`, the README
+and the minimum CI test environment aligned. Preserve the integration domain
+and repository path used by existing installations.
+
 ## Live validation
 
 Only test against a camera you own and when it is free for testing. Back up the

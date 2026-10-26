@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Update the HACS badge and installation guidance to reflect inclusion in the
+  default catalog, and remove outdated version announcements from the README.
+- Document HACS distribution and release maintenance for contributors.
+
 ## 0.5.1 — 2026-10-20
 
 - Transform camera stream chunks in executor workers instead of blocking the
