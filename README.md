@@ -61,8 +61,8 @@ setting write is read back before HA updates its state.
 Firmware updates, reset/reboot, debug shell access, storage formatting, song
 upload/removal and arbitrary protocol commands are deliberately blocked. The
 microSD fields used by the app returned no data on the verified camera. Talkback
-is not yet integrated. See
-[PROTOCOL.md](PROTOCOL.md) for protocol details and compatibility limits.
+is not yet integrated. See the [protocol reference](docs/protocol.md) for
+protocol details and compatibility limits.
 
 ## Motion and sound detections
 
@@ -147,8 +147,9 @@ email code always requires submitting the email form.
 - Recovery checks the tunnel handshake; rejection by the camera's internal RTSP
   service alone is not currently a renewal trigger.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development and testing, and
-[PROTOCOL.md](PROTOCOL.md) for interoperability details.
+See the [documentation index](docs/README.md) for protocol details,
+development, testing and release maintenance. Contribution guidelines are in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Support and security
 
@@ -169,4 +170,4 @@ included solely to construct its local stream credentials.
 
 Motorola and the Motorola logo are trademarks of Motorola Trademark Holdings,
 LLC. Brand artwork is used only to identify compatible products; see
-[BRAND_ASSETS.md](BRAND_ASSETS.md).
+[brand assets](docs/brand-assets.md).
