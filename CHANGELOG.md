@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Organize protocol, development/validation and brand documentation under
+  `docs/`, with an index and updated links from the README and contributor guide.
+- Preserve the local telemetry investigation's results and limits in the protocol
+  reference, replacing the link to a private research path with a public summary.
+- Update the HACS badge and installation guidance to reflect inclusion in the
+  default catalog, and remove outdated version announcements from the README.
+- Document HACS distribution and release maintenance for contributors.
+
 ## 0.5.1 — 2026-10-20
 
 - Transform camera stream chunks in executor workers instead of blocking the

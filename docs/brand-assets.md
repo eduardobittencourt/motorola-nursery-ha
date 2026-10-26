@@ -1,5 +1,7 @@
 # Brand assets
 
+[Documentation index](README.md)
+
 The integration icon is the Motorola Nursery application icon published by
 5GENCARE.COM LIMITED. It was retrieved from Apple's public App Store artwork
 endpoint for [Motorola Nursery](https://apps.apple.com/app/id1558991967) on
