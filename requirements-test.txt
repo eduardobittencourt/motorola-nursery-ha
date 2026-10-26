@@ -1,4 +1,4 @@
 # The HA test plugin pins Home Assistant, pytest, pytest-asyncio and coverage.
 # Keep those versions owned by the plugin to avoid conflicting direct pins.
 -r requirements-test-tools.txt
-pytest-homeassistant-custom-component==0.13.372
+pytest-homeassistant-custom-component==0.13.373
