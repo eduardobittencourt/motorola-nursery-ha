@@ -55,7 +55,8 @@
       "invalid_code": "The code is invalid or expired.",
       "code_request_failed": "The Motorola code request could not be completed. Enable debug logging and see the troubleshooting guide.",
       "cloud_error": "Motorola returned an unexpected response.",
-      "invalid_host": "Enter an IP address or hostname, without a URL or port."
+      "invalid_host": "Enter an IP address or hostname, without a URL or port.",
+      "invalid_device_response": "Motorola responded, but its camera details do not match the supported format. Enable debug logging and see the troubleshooting guide."
     },
     "abort": {
       "already_configured": "This camera is already configured. Use Reconfigure on its existing entry.",

@@ -32,6 +32,7 @@ from .cloud import (
     CloudClient,
     CloudError,
     Device,
+    DeviceListError,
     Session,
     atom,
 )
@@ -214,6 +215,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
             await self._close_client()
             return self.async_abort(reason="login_connection_lost")
+        except DeviceListError:
+            _LOGGER.debug(
+                "Account setup failed: stage=device_listing category=device_response"
+            )
+            await self._close_client()
+            errors["base"] = "invalid_device_response"
         except (*NETWORK_ERRORS, CloudError):
             _LOGGER.debug("Account setup failed: stage=device_listing category=cloud")
             await self._close_client()

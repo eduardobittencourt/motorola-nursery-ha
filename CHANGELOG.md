@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.4 — 2026-10-27
+
+- Add privacy-safe camera-list diagnostics: count/framing, field shapes and lengths,
+  known model family, credential validation flags and exact failed rules.
+- Distinguish unsupported camera-list data from network errors in setup, with
+  English and Brazilian Portuguese guidance and authenticated retry preserved.
+- Keep existing tunnel credential limits and camera compatibility unchanged;
+  document VM85CONNECT manufacturer references and their protocol limits.
+- Cover malformed counts, oversized IDs, credential boundaries, unknown model
+  redaction and device-list retry without sending another email code.
+
 ## 0.5.3 — 2026-10-27
 
 - Fix email-code requests for accounts routed to another Motorola server: treat
