@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import secrets
 import string
 from typing import Any, override
@@ -11,6 +12,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.const import CONF_HOST
+from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import callback
 from homeassistant.helpers.selector import (
     SelectSelector,
@@ -20,6 +22,7 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
     TextSelectorType,
 )
+from homeassistant.loader import async_get_integration
 from homeassistant.util.network import is_host_valid
 
 from .auth import account_lock, async_client, credentials_from_data, device_data
@@ -36,6 +39,7 @@ from .const import CONF_CODE, CONF_DEVICE, CONF_EMAIL, CONF_SESSION, DOMAIN
 from .protocol import MagicP2PTunnel
 
 NETWORK_ERRORS = (OSError, TimeoutError, EOFError)
+_LOGGER = logging.getLogger(__name__)
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -88,6 +92,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             await self._close_client()
             self._challenge = None
+            if _LOGGER.isEnabledFor(logging.DEBUG):
+                integration = await async_get_integration(self.hass, DOMAIN)
+                _LOGGER.debug(
+                    "Account setup started: integration=%s home_assistant=%s "
+                    "bootstrap=default_vendor_server region=vendor_routed",
+                    integration.version,
+                    HA_VERSION,
+                )
             try:
                 email = atom(user_input[CONF_EMAIL].strip())
                 if email.count("@") != 1 or len(email) > 254:
@@ -99,10 +111,22 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self._login_uuid, email
                 )
             except ValueError:
+                _LOGGER.debug(
+                    "Account setup failed: stage=email_validation "
+                    "category=invalid_input"
+                )
                 errors[CONF_EMAIL] = "invalid_email"
             except NETWORK_ERRORS:
+                _LOGGER.warning(
+                    "Account setup failed: stage=code_request "
+                    "category=network; enable integration debug logging for details"
+                )
                 errors["base"] = "cannot_connect_cloud"
             except CloudError:
+                _LOGGER.warning(
+                    "Account setup failed: stage=code_request "
+                    "category=protocol; enable integration debug logging for details"
+                )
                 errors["base"] = "code_request_failed"
             else:
                 self._expiry = self.hass.loop.call_later(
@@ -143,11 +167,21 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Do not request/submit the email code again if listing fails.
                 return await self.async_step_devices()
             except (AuthenticationError, ValueError):
+                _LOGGER.debug(
+                    "Account setup failed: stage=code_submission "
+                    "category=authentication"
+                )
                 errors[CONF_CODE] = "invalid_code"
             except NETWORK_ERRORS:
+                _LOGGER.debug(
+                    "Account setup failed: stage=code_submission category=network"
+                )
                 await self._close_client()
                 return self.async_abort(reason="login_connection_lost")
             except CloudError:
+                _LOGGER.debug(
+                    "Account setup failed: stage=code_submission category=protocol"
+                )
                 errors["base"] = "cloud_error"
         return self.async_show_form(
             step_id="code",
@@ -175,9 +209,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._session = await self._client.resume(self._session)
             devices = await self._client.devices()
         except AuthenticationError:
+            _LOGGER.debug(
+                "Account setup failed: stage=device_listing category=authentication"
+            )
             await self._close_client()
             return self.async_abort(reason="login_connection_lost")
         except (*NETWORK_ERRORS, CloudError):
+            _LOGGER.debug("Account setup failed: stage=device_listing category=cloud")
             await self._close_client()
             errors["base"] = "cannot_connect_cloud"
         else:

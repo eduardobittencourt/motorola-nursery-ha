@@ -163,6 +163,8 @@ async def test_diagnostics_excludes_all_account_and_device_data(hass):
     entry = entry_for(hass)
     result = await async_get_config_entry_diagnostics(hass, entry)
     assert set(result) == {
+        "integration_version",
+        "home_assistant_version",
         "entry_version",
         "account_login_configured",
         "entry_state",

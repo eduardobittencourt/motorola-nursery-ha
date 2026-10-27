@@ -1,5 +1,6 @@
 """Native HA onboarding, reconfiguration and safe failure behavior."""
 
+import logging
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -11,6 +12,7 @@ from custom_components.motorola_nursery.auth import device_data
 from custom_components.motorola_nursery.cloud import (
     AuthenticationError,
     Challenge,
+    CloudError,
     Device,
     Session,
 )
@@ -27,6 +29,43 @@ DEVICE = Device(
     "-1",
 )
 SESSION = Session("123456", "synthetic-token", "1234567", "9.moto.5gencare.com")
+
+
+@pytest.mark.parametrize(
+    ("error", "category", "ui_error"),
+    [
+        (CloudError("private-token"), "protocol", "code_request_failed"),
+        (TimeoutError("private-endpoint"), "network", "cannot_connect_cloud"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_first_setup_failure_has_safe_logs_and_version_context(
+    hass, caplog, error, category, ui_error
+):
+    caplog.set_level(logging.DEBUG, logger="custom_components.motorola_nursery")
+    client = make_client()
+    client.request_code.side_effect = error
+    with (
+        patch(
+            "custom_components.motorola_nursery.config_flow.async_client",
+            AsyncMock(return_value=client),
+        ),
+        patch("homeassistant.config_entries.async_process_deps_reqs", AsyncMock()),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": "user"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"email": "private@example.test"}
+        )
+    assert result["errors"] == {"base": ui_error}
+    assert "Account setup started: integration=" in caplog.text
+    assert "home_assistant=" in caplog.text
+    assert f"stage=code_request category={category}" in caplog.text
+    assert "private" not in caplog.text
+    client.close.assert_awaited_once()
+    hass.config_entries.flow.async_abort(result["flow_id"])
+    await hass.async_block_till_done()
 
 
 def make_client():

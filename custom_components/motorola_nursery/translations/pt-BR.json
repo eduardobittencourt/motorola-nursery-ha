@@ -53,7 +53,7 @@
       "cannot_connect_cloud": "Não foi possível acessar a Motorola. Tente novamente.",
       "invalid_email": "Informe um endereço de e-mail válido.",
       "invalid_code": "O código é inválido ou expirou.",
-      "code_request_failed": "A Motorola não aceitou a solicitação do código. Aguarde antes de tentar novamente.",
+      "code_request_failed": "Não foi possível concluir a solicitação de código à Motorola. Ative o log de depuração e consulte o guia de solução de problemas.",
       "cloud_error": "A Motorola retornou uma resposta inesperada.",
       "invalid_host": "Informe um IP ou nome de rede, sem URL ou porta."
     },
