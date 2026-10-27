@@ -12,6 +12,9 @@ from dataclasses import dataclass
 CAMERA_PORT = 77
 INTERNAL_RTSP_PORT = 6667
 CONNECT_TIMEOUT = 8
+# Supported input sizes, not the minimum padding widths used in generate_sid.
+MIN_SID_DEVICE_LENGTH = 3
+MAX_SID_DEVICE_LENGTH = 30
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -29,8 +32,11 @@ class Credentials:
         """Reject malformed data before opening a network connection."""
         if self.sid_user_id < 0 or self.sid_user_id > 0xFFFFFFFF:
             raise ValueError("SID user ID must fit in an unsigned 32-bit integer")
-        if not 3 <= len(self.sid_device) <= 20:
-            raise ValueError("SID device value must contain 3 to 20 bytes")
+        if not MIN_SID_DEVICE_LENGTH <= len(self.sid_device) <= MAX_SID_DEVICE_LENGTH:
+            raise ValueError(
+                f"SID device value must contain {MIN_SID_DEVICE_LENGTH} "
+                f"to {MAX_SID_DEVICE_LENGTH} bytes"
+            )
         if not 3 <= len(self.magic_token) <= 27:
             raise ValueError("MagicP2P token must contain 3 to 27 bytes")
         if not self.rtsp_username or not self.rtsp_password or not self.access_token:
@@ -100,6 +106,8 @@ def generate_sid(credentials: Credentials) -> bytes:
     identifier = f"{credentials.sid_user_id:08x}".encode()
     device = credentials.sid_device
     token = credentials.magic_token
+    # The native v1 format uses minimum widths (%-20s/%-27s), not truncation.
+    # Keep the full device value, including 30-byte IDs, in the key and HMAC.
     key = (
         identifier
         + device.ljust(20, b" ")

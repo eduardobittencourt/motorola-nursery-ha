@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib.util
+import json
 import sys
 import threading
 import unittest
@@ -20,6 +21,37 @@ assert SPEC is not None and SPEC.loader is not None
 protocol = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = protocol
 SPEC.loader.exec_module(protocol)
+
+
+@pytest.mark.parametrize(
+    "vector",
+    json.loads((Path(__file__).parent / "fixtures" / "sid_v1.json").read_text())[
+        "cases"
+    ],
+)
+def test_sid_matches_native_app_vectors(vector) -> None:
+    """Native app outputs cover both VM65-size and full 30-byte credentials."""
+    credentials = protocol.Credentials(
+        sid_user_id=vector["owner_id"],
+        sid_device=vector["device"].encode(),
+        magic_token=vector["token"].encode(),
+        rtsp_username="synthetic",
+        rtsp_password="synthetic",
+        access_token="synthetic",
+    )
+    expected = vector["expected_sid"].encode()
+    assert protocol.generate_sid(credentials) == expected
+    request, sid = protocol.build_handshake(credentials)
+    assert sid == expected and expected in request
+
+
+@pytest.mark.parametrize("device", [b"ab", b"x" * 31])
+def test_sid_rejects_unsupported_lengths_without_values(device) -> None:
+    """The widened input remains bounded and errors do not expose credentials."""
+    credentials = protocol.Credentials(123456, device, b"synthetic", "u", "p", "a")
+    with pytest.raises(ValueError, match="3 to 30 bytes") as caught:
+        protocol.generate_sid(credentials)
+    assert device.decode() not in str(caught.value)
 
 
 class CipherTest(unittest.TestCase):

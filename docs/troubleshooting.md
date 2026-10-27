@@ -89,8 +89,15 @@ same log collection procedure above, then restore the log level.
 For example, `declared_count=1 received_fields=8 expected_fields=8` confirms the
 expected seven-field layout for one camera; `reasons=device_id_length` then
 isolates the unsupported field. This does not establish why its value differs
-or prove that the whole camera protocol is incompatible. Current v1 tunnel
-limits remain enforced until evidence supports another layout or transport.
+or prove that the whole camera protocol is incompatible. Version 0.5.5 accepts
+SID device values up to 30 bytes after comparison with the Android app's native
+v1 implementation; update and restart HA before retrying a 30-byte rejection.
+
+If camera selection now succeeds, enter the camera's LAN address from a network
+that Home Assistant can reach. Report whether setup accepts that address, then
+whether opening the camera produces live video. A local connection failure is
+a separate stage from account login or device listing. Include the camera
+firmware if the app displays it, but do not send credentials or serial numbers.
 
 ## What to include in an issue
 

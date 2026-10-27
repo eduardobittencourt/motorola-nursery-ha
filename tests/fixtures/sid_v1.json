@@ -1,0 +1,19 @@
+{
+  "source": "APK 2.2.18 libdevconn.so, native ARM execution",
+  "synthetic_only": true,
+  "cases": [
+    {
+      "owner_id": 123456,
+      "device": "SYNTHETIC-DEVICE-ABC",
+      "token": "SYNTHETIC-TOKEN-12345678901",
+      "expected_sid": "0001e240synsynbc276f9949b8ebf2d7ee882af1c0dae814ecf18b6baa52b7a5c08493c05f9930"
+    },
+    {
+      "owner_id": 123456,
+      "device": "SYNTHETIC-DEVICE-ABCDEFGHIJKLM",
+      "token": "SYNTHETIC-TOKEN-12345678901",
+      "expected_sid": "0001e240synsyn5708ee9e839f52d9d8e8f04c4d7394861f96daec3d99ce001f48679871578292"
+    }
+  ],
+  "native_library_sha256": "49b4af24c8ad6a6cd2fddc718ceb35b6053f7e8878bb3030a879398615e5245d"
+}

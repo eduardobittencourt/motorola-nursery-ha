@@ -66,9 +66,18 @@ preserved; unused login and device fields are not interpreted.
 The supported `v3_dlist` layout is one count (0–32), followed by seven fields
 per camera: owner ID, device identifier, model, encoded name, MagicP2P token,
 SID device value and an unused trailing field. The current local tunnel needs
-an unsigned 32-bit owner ID, a 3–27-byte token and a 3–20-byte SID device value.
-These limits are preserved when collecting diagnostics; an unsupported row
+an unsigned 32-bit owner ID, a 3–27-byte token and a 3–30-byte SID device value.
+Cloud parsing and tunnel validation share the SID bounds; an unsupported row
 rejects the list rather than silently dropping a camera or truncating credentials.
+
+Version 0.5.5 accepts the 30-byte SID device value observed on VM85CONNECT.
+The native Android 2.2.18 v1 implementation uses 20 as a minimum padding width,
+not a maximum identifier size. Its SID output matches the existing algorithm
+with the full 30-byte value; synthetic native reference vectors cover both
+20 and 30 bytes. The accepted maximum of 30 is a supported-input bound, not a
+claimed vendor protocol maximum. No credentials are truncated and the v1
+handshake and cipher remain unchanged. This fixes the observed list rejection;
+VM85 local connection, video and controls still require physical validation.
 
 Debug logs describe declared/expected/received field counts, zero-based record
 index, field lengths and kinds (`empty`, `decimal`, `negative_decimal`, `text`),
