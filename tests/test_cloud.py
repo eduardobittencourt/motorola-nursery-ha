@@ -464,12 +464,13 @@ def test_device_list_records_multiple_rejections_and_redacts_unknown_model(caplo
     "model", ["VM65", "VM65CONNECT", "VM85", "VM85CONNECT", "other-private-model"]
 )
 @pytest.mark.parametrize(
-    "owner,token_length,device_length", [("0", 3, 3), ("4294967295", 27, 20)]
+    "owner,token_length,device_length",
+    [("0", 3, 3), ("4294967295", 27, 20), ("123456", 27, 30)],
 )
 def test_device_list_existing_credential_boundaries_remain_supported(
     model, owner, token_length, device_length, caplog
 ):
-    """Diagnostics preserve the wire credential boundaries without model gating."""
+    """Accept original and 30-byte credentials without model gating or truncation."""
     caplog.set_level(logging.DEBUG, logger="custom_components.motorola_nursery")
     row = [
         owner,
@@ -482,6 +483,7 @@ def test_device_list_existing_credential_boundaries_remain_supported(
     ]
     devices = parse_devices(["1", *row])
     assert len(devices) == 1 and devices[0].model == model
+    assert devices[0].sid_device == row[5]
     assert "owner_fits_u32=True" in caplog.text
     assert "magic_token_length_valid=True device_id_length_valid=True" in caplog.text
     assert "private" not in caplog.text

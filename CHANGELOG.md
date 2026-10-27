@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.5 — 2026-10-27
+
+- Accept SID device values up to 30 bytes in account discovery and local tunnel
+  validation, fixing the observed VM85CONNECT camera-list rejection.
+- Preserve complete identifiers and the existing v1 SID algorithm, handshake
+  and cipher; the native app uses 20 as a padding width, not a maximum size.
+- Add synthetic native-app SID reference vectors, credential bounds and setup
+  coverage for 20- and 30-byte identifiers. VM85 video remains unverified.
+
 ## 0.5.4 — 2026-10-27
 
 - Add privacy-safe camera-list diagnostics: count/framing, field shapes and lengths,

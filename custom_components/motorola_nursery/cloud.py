@@ -12,6 +12,8 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from urllib.parse import unquote
 
+from .protocol import MAX_SID_DEVICE_LENGTH, MIN_SID_DEVICE_LENGTH
+
 DEFAULT_HOST = "9.moto.5gencare.com"
 PORT = 3388
 MAX_LINE = 65536
@@ -192,7 +194,10 @@ def parse_devices(fields: list[str]) -> list[Device]:
             failures.append("owner_id_out_of_u32_range")
         if not 3 <= len(row[4]) <= 27:
             failures.append("magic_token_length")
-        if not 3 <= len(row[5]) <= 20:
+        device_length_valid = (
+            MIN_SID_DEVICE_LENGTH <= len(row[5]) <= MAX_SID_DEVICE_LENGTH
+        )
+        if not device_length_valid:
             failures.append("device_id_length")
         _LOGGER.debug(
             "Account device record: index=%d model_family=%s "
@@ -204,14 +209,16 @@ def parse_devices(fields: list[str]) -> list[Device]:
             tuple(map(_field_kind, row)),
             owner_fits,
             3 <= len(row[4]) <= 27,
-            3 <= len(row[5]) <= 20,
+            device_length_valid,
         )
         if failures:
             _LOGGER.debug(
                 "Account device record rejected: index=%d reasons=%s "
-                "supported_magic_token_length=3..27 supported_device_id_length=3..20",
+                "supported_magic_token_length=3..27 supported_device_id_length=%d..%d",
                 index,
                 ",".join(failures),
+                MIN_SID_DEVICE_LENGTH,
+                MAX_SID_DEVICE_LENGTH,
             )
             raise DeviceListError("Invalid device credentials")
         result.append(Device(*row))

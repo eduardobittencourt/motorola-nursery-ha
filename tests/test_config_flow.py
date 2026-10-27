@@ -1,6 +1,7 @@
 """Native HA onboarding, reconfiguration and safe failure behavior."""
 
 import logging
+from dataclasses import astuple, replace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -16,9 +17,11 @@ from custom_components.motorola_nursery.cloud import (
     Device,
     DeviceListError,
     Session,
+    parse_devices,
 )
 from custom_components.motorola_nursery.config_flow import ConfigFlow
 from custom_components.motorola_nursery.const import DOMAIN
+from custom_components.motorola_nursery.protocol import build_handshake
 
 DEVICE = Device(
     "123456",
@@ -88,9 +91,22 @@ def make_flow(hass, source="user", entry=None):
 
 
 @pytest.mark.asyncio
-async def test_full_ui_flow(hass):
+@pytest.mark.parametrize(
+    "model,sid_device",
+    [("VM65", "abcdefghijklmnopqrst"), ("VM85CONNECT", "x" * 30)],
+)
+async def test_full_ui_flow(hass, model, sid_device):
     flow = make_flow(hass)
     client = make_client()
+    device = replace(DEVICE, model=model, sid_device=sid_device)
+    client.devices.return_value = parse_devices(["1", *astuple(device)])
+
+    async def connect(host, credentials):
+        assert host == "192.0.2.10"
+        assert credentials.sid_device == sid_device.encode()
+        build_handshake(credentials)
+        return AsyncMock()
+
     with (
         patch(
             "custom_components.motorola_nursery.config_flow.async_client",
@@ -98,7 +114,7 @@ async def test_full_ui_flow(hass):
         ),
         patch(
             "custom_components.motorola_nursery.config_flow.MagicP2PTunnel.connect",
-            AsyncMock(return_value=AsyncMock()),
+            AsyncMock(side_effect=connect),
         ),
     ):
         result = await flow.async_step_user()
@@ -108,12 +124,12 @@ async def test_full_ui_flow(hass):
         assert result["step_id"] == "code"
         result = await flow.async_step_code({"code": "123456"})
         assert result["step_id"] == "device"
-        result = await flow.async_step_device({"device": DEVICE.sid_device})
+        result = await flow.async_step_device({"device": sid_device})
         assert result["step_id"] == "host"
         result = await flow.async_step_host({"host": "192.0.2.10"})
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert result["data"]["cloud_session"]["token"] == SESSION.token
-    assert result["data"]["sid_device"] == DEVICE.sid_device
+    assert result["data"]["sid_device"] == sid_device
     assert "code" not in result["data"]
     client.request_code.assert_awaited_once()
     client.close.assert_awaited_once()
