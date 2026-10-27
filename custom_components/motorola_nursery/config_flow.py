@@ -287,16 +287,21 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_EMAIL: self._email,
                     CONF_SESSION: self._session.as_dict(),
                 }
+                _LOGGER.debug("Local camera probe started: source=account_setup")
                 try:
                     tunnel = await MagicP2PTunnel.connect(
                         host, credentials_from_data(data)
                     )
+                    _LOGGER.debug("Local camera probe closing: source=account_setup")
                     await tunnel.close()
                 except NETWORK_ERRORS:
+                    _LOGGER.debug("Local camera probe failed: category=connection")
                     errors["base"] = "cannot_connect"
                 except ValueError:
+                    _LOGGER.debug("Local camera probe failed: category=credentials")
                     errors["base"] = "invalid_auth"
                 else:
+                    _LOGGER.debug("Local camera probe accepted: source=account_setup")
                     if target is not None:
                         async with account_lock(self.hass, target):
                             return self.async_update_reload_and_abort(
@@ -327,14 +332,18 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not is_host_valid(host):
                 errors[CONF_HOST] = "invalid_host"
             else:
+                _LOGGER.debug("Local camera probe started: source=change_host")
                 try:
                     tunnel = await MagicP2PTunnel.connect(
                         host, credentials_from_data(entry.data)
                     )
+                    _LOGGER.debug("Local camera probe closing: source=change_host")
                     await tunnel.close()
                 except NETWORK_ERRORS:
+                    _LOGGER.debug("Local camera probe failed: category=connection")
                     errors["base"] = "cannot_connect"
                 else:
+                    _LOGGER.debug("Local camera probe accepted: source=change_host")
                     return self.async_update_reload_and_abort(
                         entry, data_updates={CONF_HOST: host}
                     )

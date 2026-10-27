@@ -31,6 +31,16 @@ receive maintain separate cipher states. Each chunk is transformed in an
 executor worker, with a lock per direction to preserve ordering. Cancellation
 closes the tunnel and waits for the transform before releasing its state.
 
+Local debug diagnostics distinguish credential validation, TCP connect,
+handshake send, handshake receive and handshake validation. The response read
+remains bounded to the existing 90-byte v1 acknowledgement, with an overall
+eight-second connection deadline. Partial replies are retained only in memory
+to report their length and framing on EOF or timeout. Logs expose only field
+count, allowlisted prefix/delimiter categories and a SID-match flag; they never
+include raw bytes, SID, tokens, endpoints or exception text. Authentication
+still requires the exact existing acknowledgement. These diagnostics do not
+select another transport or establish compatibility with another firmware.
+
 The integration uses internal RTSP port 6667. A loopback-only RTSP bridge feeds
 an on-demand FFmpeg relay, which copies H.264 video and converts PCMA audio to
 AAC for Home Assistant's native Stream integration. Both listeners bind to

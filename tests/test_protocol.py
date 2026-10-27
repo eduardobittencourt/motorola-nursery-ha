@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import importlib.util
 import json
+import logging
+import socket
 import sys
 import threading
 import unittest
@@ -21,6 +24,175 @@ assert SPEC is not None and SPEC.loader is not None
 protocol = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = protocol
 SPEC.loader.exec_module(protocol)
+
+
+@pytest.fixture
+def local_credentials():
+    """Use recognizable synthetic secrets to detect accidental disclosure."""
+    return protocol.Credentials(
+        123456,
+        b"private-device-value",
+        b"private-magic-token",
+        "private-user",
+        "private-password",
+        "private-access",
+    )
+
+
+@pytest.mark.parametrize(
+    "error,category",
+    [
+        (ConnectionRefusedError("private-endpoint"), "connection_refused"),
+        (socket.gaierror(-2, "private-endpoint"), "dns"),
+        (OSError(errno.EHOSTUNREACH, "private-endpoint"), "unreachable"),
+        (OSError(errno.EACCES, "private-endpoint"), "permission"),
+        (OSError("private-endpoint"), "connection"),
+        (TimeoutError("private-endpoint"), "timeout"),
+    ],
+)
+async def test_local_tcp_failure_logs_safe_category(
+    monkeypatch, caplog, local_credentials, error, category
+):
+    """TCP failures remain distinguishable without endpoint or exception text."""
+    caplog.set_level(logging.DEBUG, logger=protocol.__name__)
+    monkeypatch.setattr(asyncio, "open_connection", AsyncMock(side_effect=error))
+    with pytest.raises(type(error)) as caught:
+        await protocol.MagicP2PTunnel.connect("private-host", local_credentials)
+    assert caught.value is error
+    assert f"stage=tcp_connect category={category}" in caplog.text
+    assert "private" not in caplog.text
+    assert not any(record.exc_info for record in caplog.records)
+
+
+@pytest.mark.parametrize(
+    "kind,stage,category,shape",
+    [
+        ("empty", "handshake_receive", "incomplete_response", "empty"),
+        ("negative", "handshake_receive", "incomplete_response", "negative_status"),
+        ("partial_timeout", "handshake_receive", "timeout", "expected_prefix"),
+        ("reset", "handshake_receive", "connection_reset", "empty"),
+        ("wrong_sid", "handshake_validate", "unexpected_response", "expected_prefix"),
+        ("wrong_prefix", "handshake_validate", "unexpected_response", "other"),
+        (
+            "wrong_delimiter",
+            "handshake_validate",
+            "unexpected_response",
+            "expected_prefix",
+        ),
+        ("send", "handshake_send", "connection", None),
+    ],
+)
+async def test_local_handshake_failures_preserve_stage_and_redact_response(
+    monkeypatch, caplog, local_credentials, kind, stage, category, shape
+):
+    """Different handshake failures expose framing only and close the socket."""
+    caplog.set_level(logging.DEBUG, logger=protocol.__name__)
+    sid = protocol.generate_sid(local_credentials)
+    replies = {
+        "empty": [b""],
+        "negative": [b"-7 private-response\n", b""],
+        "partial_timeout": [b"ok 0 dconn "],
+        "reset": [ConnectionResetError("private-response")],
+        "wrong_sid": [b"ok 0 dconn " + b"x" * len(sid) + b"\n"],
+        "wrong_prefix": [b"private".ljust(11 + len(sid), b"x") + b"\n"],
+        "wrong_delimiter": [b"ok 0 dconn " + sid + b"!"],
+        "send": [],
+    }
+    chunks = iter(replies[kind])
+
+    async def read(size):
+        chunk = next(chunks, None)
+        if chunk is None:
+            await asyncio.Event().wait()
+        if isinstance(chunk, BaseException):
+            raise chunk
+        assert len(chunk) <= size
+        return chunk
+
+    reader = Mock(read=AsyncMock(side_effect=read))
+    writer = Mock(drain=AsyncMock(), wait_closed=AsyncMock())
+    if kind == "send":
+        writer.drain.side_effect = OSError("private-send-error")
+    # Teardown errors must not obscure the original failure.
+    writer.wait_closed.side_effect = ConnectionResetError("private-cleanup-error")
+    monkeypatch.setattr(protocol, "CONNECT_TIMEOUT", 0.05)
+    monkeypatch.setattr(
+        asyncio, "open_connection", AsyncMock(return_value=(reader, writer))
+    )
+    with pytest.raises((OSError, EOFError)):
+        await protocol.MagicP2PTunnel.connect("private-host", local_credentials)
+    assert f"stage={stage} category={category}" in caplog.text
+    if shape is not None:
+        assert f"shape={shape}" in caplog.text
+        assert "expected_bytes=90" in caplog.text
+    if kind == "partial_timeout":
+        assert "received_bytes=11" in caplog.text
+    assert "private" not in caplog.text
+    assert sid.decode() not in caplog.text
+    assert not any(record.exc_info for record in caplog.records)
+    writer.close.assert_called_once()
+    writer.wait_closed.assert_awaited_once()
+
+
+@pytest.mark.parametrize("delimiter", [b"\n", b"\r", b"\0", b" "])
+async def test_local_handshake_fragmented_success(
+    monkeypatch, caplog, local_credentials, delimiter
+):
+    """All original terminators work without consuming post-handshake data."""
+    caplog.set_level(logging.DEBUG, logger=protocol.__name__)
+    sid = protocol.generate_sid(local_credentials)
+    reply = b"ok 0 dconn " + sid + delimiter
+    reader = asyncio.StreamReader()
+    writer = Mock(drain=AsyncMock(), wait_closed=AsyncMock())
+
+    # Feed fragments over separate loop turns, followed by tunnel data.
+    async def feed():
+        for chunk in (reply[:4], reply[4:21], reply[21:] + b"extra"):
+            reader.feed_data(chunk)
+            await asyncio.sleep(0)
+
+    monkeypatch.setattr(
+        asyncio, "open_connection", AsyncMock(return_value=(reader, writer))
+    )
+    feeder = asyncio.create_task(feed())
+    tunnel = await protocol.MagicP2PTunnel.connect("private-host", local_credentials)
+    await feeder
+    assert await reader.read(5) == b"extra"
+    assert "received_bytes=90 expected_bytes=90" in caplog.text
+    assert "sid_matches=True" in caplog.text
+    assert "Local tunnel authenticated" in caplog.text
+    assert "private" not in caplog.text and sid.decode() not in caplog.text
+    writer.close.assert_not_called()
+    await tunnel.close()
+
+
+async def test_local_connect_cancellation_cleans_up(
+    monkeypatch, caplog, local_credentials
+):
+    """Cancellation remains cancellation and closes a partially opened tunnel."""
+    caplog.set_level(logging.DEBUG, logger=protocol.__name__)
+    reading = asyncio.Event()
+
+    async def read(size):
+        reading.set()
+        await asyncio.Event().wait()
+
+    reader = Mock(read=AsyncMock(side_effect=read))
+    writer = Mock(drain=AsyncMock(), wait_closed=AsyncMock())
+    monkeypatch.setattr(
+        asyncio, "open_connection", AsyncMock(return_value=(reader, writer))
+    )
+    task = asyncio.create_task(
+        protocol.MagicP2PTunnel.connect("private-host", local_credentials)
+    )
+    await asyncio.wait_for(reading.wait(), 1)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert "Local tunnel cancelled: stage=handshake_receive" in caplog.text
+    assert "Local tunnel failed" not in caplog.text
+    writer.close.assert_called_once()
+    writer.wait_closed.assert_awaited_once()
 
 
 @pytest.mark.parametrize(

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.6b1 — 2026-10-27
+
+- Add debug diagnostics for local TCP connection, handshake send/receive and
+  response validation, separating DNS, refusal, timeout, reset and incomplete
+  responses without recording addresses, credentials or raw response bytes.
+- Report bounded response lengths, field count, prefix shape, SID match and
+  delimiter category, including partial replies before a timeout or EOF.
+- Trace local setup/reconfiguration probes and cleanup; preserve the original
+  failure when socket teardown also fails.
+- Distribute this investigation as a beta prerelease. VM85 local connection
+  and video remain unverified; no transport or authentication change is claimed.
+
 ## 0.5.5 — 2026-10-27
 
 - Accept SID device values up to 30 bytes in account discovery and local tunnel
