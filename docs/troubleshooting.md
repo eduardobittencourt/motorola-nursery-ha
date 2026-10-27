@@ -72,6 +72,26 @@ they do not contain the failed first-setup exchange.
 
 See Home Assistant's [debug logging and diagnostics guide](https://www.home-assistant.io/docs/configuration/troubleshooting/#debug-logs-and-diagnostics).
 
+## Code accepted, but camera listing fails
+
+If logs show a completed `v3_loginset` followed by a `v3_dlist` validation
+failure, the OTP authentication has succeeded and the server has responded.
+An unsupported camera-list response is different from a network outage.
+Version 0.5.4 distinguishes these cases in the setup error message.
+
+With integration debug enabled, share the reviewed `Account device list framing`,
+`Account device list rejected`, `Account device record` and
+`Account device record rejected` lines from one attempt, along with the setup
+version line. They identify the count/shape or credential rule that failed using
+only types, lengths and validation flags. No raw response is needed. Use the
+same log collection procedure above, then restore the log level.
+
+For example, `declared_count=1 received_fields=8 expected_fields=8` confirms the
+expected seven-field layout for one camera; `reasons=device_id_length` then
+isolates the unsupported field. This does not establish why its value differs
+or prove that the whole camera protocol is incompatible. Current v1 tunnel
+limits remain enforced until evidence supports another layout or transport.
+
 ## What to include in an issue
 
 - Integration and Home Assistant versions.

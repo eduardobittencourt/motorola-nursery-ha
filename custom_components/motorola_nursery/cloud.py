@@ -37,6 +37,10 @@ class CloudError(Exception):
     """Malformed or rejected cloud operation."""
 
 
+class DeviceListError(CloudError):
+    """Camera-list contents do not match the supported framing or credentials."""
+
+
 class AuthenticationError(CloudError):
     """The session or email code was rejected."""
 
@@ -122,23 +126,94 @@ class Device:
         return unquote(self.encoded_name) or "Motorola camera"
 
 
+def _field_kind(value: str) -> str:
+    """Describe field structure without exporting any vendor-supplied value."""
+    if not value:
+        return "empty"
+    if value.isascii() and value.isdecimal():
+        return "decimal"
+    if value.startswith("-") and value[1:].isascii() and value[1:].isdecimal():
+        return "negative_decimal"
+    return "text"
+
+
+def _model_family(value: str) -> str:
+    """Only export known model families, never arbitrary model field contents."""
+    if value in {"VM65", "VM65CONNECT"}:
+        return "VM65"
+    if value in {"VM85", "VM85CONNECT"}:
+        return "VM85"
+    return "other"
+
+
 def parse_devices(fields: list[str]) -> list[Device]:
+    """Validate camera rows and log only counts, shapes and failed rule names."""
     try:
         count = int(fields[0])
     except (IndexError, ValueError):
-        raise CloudError("Invalid device count") from None
-    if not 0 <= count <= 32 or len(fields) != 1 + count * 7:
-        raise CloudError("Unrecognized device list framing")
+        _LOGGER.debug(
+            "Account device list rejected: reason=invalid_count "
+            "received_fields=%d count_kind=%s",
+            len(fields),
+            _field_kind(fields[0]) if fields else "missing",
+        )
+        raise DeviceListError("Invalid device count") from None
+    if not 0 <= count <= 32:
+        _LOGGER.debug(
+            "Account device list rejected: reason=count_out_of_range "
+            "received_fields=%d supported_count=0..32",
+            len(fields),
+        )
+        raise DeviceListError("Unrecognized device list framing")
+    expected = 1 + count * 7
+    _LOGGER.debug(
+        "Account device list framing: declared_count=%d "
+        "received_fields=%d expected_fields=%d fields_per_device=7",
+        count,
+        len(fields),
+        expected,
+    )
+    if len(fields) != expected:
+        _LOGGER.debug("Account device list rejected: reason=field_count_mismatch")
+        raise DeviceListError("Unrecognized device list framing")
     result = []
     for index in range(count):
         row = fields[1 + index * 7 : 8 + index * 7]
-        if (
-            not row[0].isdigit()
-            or not 0 <= int(row[0]) <= 0xFFFFFFFF
-            or not 3 <= len(row[4]) <= 27
-            or not 3 <= len(row[5]) <= 20
-        ):
-            raise CloudError("Invalid device credentials")
+        owner_decimal = _field_kind(row[0]) == "decimal"
+        owner_fits = False
+        if owner_decimal:
+            # Oversized decimal strings may exceed Python's conversion cap.
+            with suppress(ValueError):
+                owner_fits = 0 <= int(row[0]) <= 0xFFFFFFFF
+        failures = []
+        if not owner_decimal:
+            failures.append("owner_id_not_decimal")
+        elif not owner_fits:
+            failures.append("owner_id_out_of_u32_range")
+        if not 3 <= len(row[4]) <= 27:
+            failures.append("magic_token_length")
+        if not 3 <= len(row[5]) <= 20:
+            failures.append("device_id_length")
+        _LOGGER.debug(
+            "Account device record: index=%d model_family=%s "
+            "field_lengths=%s field_kinds=%s owner_fits_u32=%s "
+            "magic_token_length_valid=%s device_id_length_valid=%s",
+            index,
+            _model_family(row[2]),
+            tuple(map(len, row)),
+            tuple(map(_field_kind, row)),
+            owner_fits,
+            3 <= len(row[4]) <= 27,
+            3 <= len(row[5]) <= 20,
+        )
+        if failures:
+            _LOGGER.debug(
+                "Account device record rejected: index=%d reasons=%s "
+                "supported_magic_token_length=3..27 supported_device_id_length=3..20",
+                index,
+                ",".join(failures),
+            )
+            raise DeviceListError("Invalid device credentials")
         result.append(Device(*row))
     return result
 
@@ -388,7 +463,7 @@ class CloudClient:
                 devices = parse_devices(fields)
             except CloudError:
                 _LOGGER.debug(
-                    "Account device listing failed: reason=unexpected_response"
+                    "Account device listing failed: reason=invalid_device_response"
                 )
                 raise
             _LOGGER.debug("Account device listing accepted: devices=%d", len(devices))

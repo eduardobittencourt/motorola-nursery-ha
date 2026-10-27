@@ -14,6 +14,7 @@ from custom_components.motorola_nursery.cloud import (
     Challenge,
     CloudError,
     Device,
+    DeviceListError,
     Session,
 )
 from custom_components.motorola_nursery.config_flow import ConfigFlow
@@ -232,3 +233,36 @@ async def test_real_ha_flow_manager_and_abort_cleanup(hass):
         hass.config_entries.flow.async_abort(result["flow_id"])
         await hass.async_block_till_done()
     client.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_invalid_device_response_keeps_authenticated_retry_without_new_otp(
+    hass, caplog
+):
+    """Camera-list validation has its own UI error and never replays a used code."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.motorola_nursery")
+    first, second = make_client(), make_client()
+    first.devices.side_effect = DeviceListError("private-response")
+    second.resume.return_value = SESSION
+    second.devices.return_value = []
+    flow = make_flow(hass)
+    with patch(
+        "custom_components.motorola_nursery.config_flow.async_client",
+        AsyncMock(side_effect=[first, second]),
+    ):
+        await flow.async_step_user({"email": "private@example.test"})
+        result = await flow.async_step_code({"code": "654321"})
+        assert result["step_id"] == "devices"
+        assert result["errors"] == {"base": "invalid_device_response"}
+        assert flow._session == SESSION
+        result = await flow.async_step_devices({})
+    assert result["reason"] == "no_devices"
+    first.request_code.assert_awaited_once()
+    first.submit_code.assert_awaited_once()
+    first.close.assert_awaited_once()
+    second.request_code.assert_not_called()
+    second.submit_code.assert_not_called()
+    second.resume.assert_awaited_once_with(SESSION)
+    second.close.assert_awaited_once()
+    assert "stage=device_listing category=device_response" in caplog.text
+    assert "private" not in caplog.text

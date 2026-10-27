@@ -61,6 +61,33 @@ SHA-1 of the camera magic token concatenated with the VM65 application's shared
 RTSP password, as required by the vendor protocol. Imported RTSP overrides are
 preserved; unused login and device fields are not interpreted.
 
+## Device-list diagnostics and model limits
+
+The supported `v3_dlist` layout is one count (0–32), followed by seven fields
+per camera: owner ID, device identifier, model, encoded name, MagicP2P token,
+SID device value and an unused trailing field. The current local tunnel needs
+an unsigned 32-bit owner ID, a 3–27-byte token and a 3–20-byte SID device value.
+These limits are preserved when collecting diagnostics; an unsupported row
+rejects the list rather than silently dropping a camera or truncating credentials.
+
+Debug logs describe declared/expected/received field counts, zero-based record
+index, field lengths and kinds (`empty`, `decimal`, `negative_decimal`, `text`),
+credential validation flags and failed rule names. `model_family` is restricted
+to known VM65/VM85 names or `other`; it never echoes an arbitrary model field.
+The cloud wire format is ASCII, so logged field lengths also describe byte
+lengths. Raw field values, IDs, names and tokens are omitted. Malformed camera
+details produce a camera-response UI error, distinct from network failures.
+
+The manufacturer's [VM85CONNECT support page](https://motorolanursery.com/support/product-support/?productId=5637)
+and [EU/US user guide](https://www.motorolanursery.com/media/yjoliuma/vm85-connect-ug-en-eu-us-v3.pdf)
+confirm Motorola Nursery app support. The public product documentation reviewed
+does not specify `v3_dlist`, tunnel credential sizes or local RTSP endpoints.
+Using the same app does not prove matching camera firmware or tunnel behavior.
+The [VM85 product page](https://www.motorolanursery.com/nursery-care-products/connected-video-baby-monitors/vm85-connect)
+also describes motorised pan and digital tilt, so VM65 physical PTZ validation
+must not be applied to VM85. VM85 remains physically unverified; logging its
+known family is diagnostic classification, not an enablement of model controls.
+
 ## Camera telemetry and events
 
 Messages are ASCII lines terminated with LF. TCP may split or combine lines.

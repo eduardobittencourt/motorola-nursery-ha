@@ -12,6 +12,7 @@ from custom_components.motorola_nursery.cloud import (
     AuthenticationError,
     CloudClient,
     CloudError,
+    DeviceListError,
     Session,
     atom,
     parse_devices,
@@ -227,7 +228,7 @@ async def test_routing_and_later_authentication_failures(caplog):
     client._messages.put_nowait(["v3_dlist", "1"])
     with pytest.raises(CloudError):
         await client.devices()
-    assert "device listing failed: reason=unexpected_response" in caplog.text
+    assert "device listing failed: reason=invalid_device_response" in caplog.text
     for secret in ("654321", "PRIVATEUUID", "private-token", "private@example.test"):
         assert secret not in caplog.text
 
@@ -362,3 +363,125 @@ async def test_otp_routing_connect_failure_and_cancellation(cancel):
     client._exchange.assert_awaited_once_with(
         "v3_otp", "PRIVATEUUID", "email", "private@example.test", "6"
     )
+
+
+@pytest.mark.parametrize(
+    ("fields", "reason"),
+    [
+        ([], "invalid_count"),
+        (["private-count@example.test"], "invalid_count"),
+        (["9" * 5000], "invalid_count"),
+        (["-1"], "count_out_of_range"),
+        (["999999"], "count_out_of_range"),
+        (["1"], "field_count_mismatch"),
+    ],
+)
+def test_device_list_framing_logs_distinct_safe_reasons(fields, reason, caplog):
+    """Count/framing failures never export arbitrary or oversized count values."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.motorola_nursery")
+    with pytest.raises(DeviceListError) as caught:
+        parse_devices(fields)
+    assert f"reason={reason}" in caplog.text
+    assert "received_fields=" in caplog.text
+    for secret in ("private-count@example.test", "999999", "9" * 5000):
+        assert secret not in caplog.text
+        assert secret not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    ("index", "value", "reason"),
+    [
+        (0, "private-owner", "owner_id_not_decimal"),
+        (0, "4294967296", "owner_id_out_of_u32_range"),
+        (0, "9" * 5000, "owner_id_out_of_u32_range"),
+        (4, "ab", "magic_token_length"),
+        (4, "private-token-too-long-for-v1-credential", "magic_token_length"),
+        (5, "ab", "device_id_length"),
+        (5, "private-device-id-too-long-for-v1", "device_id_length"),
+    ],
+)
+def test_device_list_record_logs_failed_rule_without_values(
+    index, value, reason, caplog
+):
+    """Expose field positions/lengths and the exact rule, never credential contents."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.motorola_nursery")
+    row = [
+        "654321",
+        "private-identifier",
+        "VM85CONNECT",
+        "private-camera-name",
+        "private-token",
+        "private-device-id",
+        "private-extra",
+    ]
+    row[index] = value
+    with pytest.raises(DeviceListError) as caught:
+        parse_devices(["1", *row])
+    assert "declared_count=1 received_fields=8 expected_fields=8" in caplog.text
+    assert "model_family=VM85" in caplog.text
+    assert "field_lengths=" in caplog.text and "field_kinds=" in caplog.text
+    assert f"reasons={reason}" in caplog.text
+    for secret in (
+        "654321",
+        "private-identifier",
+        "private-camera-name",
+        "private-token",
+        "private-device-id",
+        "private-extra",
+        "private-owner",
+        "4294967296",
+        "private-token-too-long-for-v1-credential",
+        "9" * 5000,
+    ):
+        assert secret not in caplog.text
+        assert secret not in str(caught.value)
+
+
+def test_device_list_records_multiple_rejections_and_redacts_unknown_model(caplog):
+    """A shifted schema can fail several rules without leaking its model field."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.motorola_nursery")
+    row = [
+        "private-owner",
+        "private-id",
+        "private-model@example.test",
+        "private-name",
+        "-1",
+        "-1",
+        "private-extra",
+    ]
+    with pytest.raises(DeviceListError):
+        parse_devices(["1", *row])
+    assert "model_family=other" in caplog.text
+    assert (
+        "reasons=owner_id_not_decimal,magic_token_length,device_id_length"
+        in caplog.text
+    )
+    assert "negative_decimal" in caplog.text
+    assert "private" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "model", ["VM65", "VM65CONNECT", "VM85", "VM85CONNECT", "other-private-model"]
+)
+@pytest.mark.parametrize(
+    "owner,token_length,device_length", [("0", 3, 3), ("4294967295", 27, 20)]
+)
+def test_device_list_existing_credential_boundaries_remain_supported(
+    model, owner, token_length, device_length, caplog
+):
+    """Diagnostics preserve the wire credential boundaries without model gating."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.motorola_nursery")
+    row = [
+        owner,
+        "private-id",
+        model,
+        "private-name",
+        "x" * token_length,
+        "y" * device_length,
+        "-1",
+    ]
+    devices = parse_devices(["1", *row])
+    assert len(devices) == 1 and devices[0].model == model
+    assert "owner_fits_u32=True" in caplog.text
+    assert "magic_token_length_valid=True device_id_length_valid=True" in caplog.text
+    assert "private" not in caplog.text

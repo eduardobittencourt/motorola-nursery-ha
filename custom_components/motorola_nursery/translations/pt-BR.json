@@ -55,7 +55,8 @@
       "invalid_code": "O código é inválido ou expirou.",
       "code_request_failed": "Não foi possível concluir a solicitação de código à Motorola. Ative o log de depuração e consulte o guia de solução de problemas.",
       "cloud_error": "A Motorola retornou uma resposta inesperada.",
-      "invalid_host": "Informe um IP ou nome de rede, sem URL ou porta."
+      "invalid_host": "Informe um IP ou nome de rede, sem URL ou porta.",
+      "invalid_device_response": "A Motorola respondeu, mas os dados das câmeras não são compatíveis com esta integração. Ative o log de depuração e consulte o guia de solução de problemas."
     },
     "abort": {
       "already_configured": "Esta câmera já está configurada. Use Reconfigurar na entrada existente.",
