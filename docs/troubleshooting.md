@@ -18,7 +18,9 @@ does not establish whether a particular camera model is compatible.
 
 ## Collect logs when the first setup cannot finish
 
-Update the integration in HACS and restart Home Assistant to load the new files.
+Update the integration in HACS, or replace the files in
+`custom_components/motorola_nursery` if you installed it manually. Restart
+Home Assistant to load the new files.
 Then enable logging **before** submitting the email form. If setup has never
 completed, the integration's debug button or diagnostics download may not be
 available. Use this method instead; it does not require another restart:
