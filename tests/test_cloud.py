@@ -4,7 +4,7 @@ import asyncio
 import logging
 import socket
 import ssl
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 
@@ -262,6 +262,7 @@ async def test_otp_redirect_reconnects_and_preserves_identity(socket_enabled, ca
     finished = asyncio.Event()
 
     async def server(reader, writer):
+        """Redirect the first connection and accept the unchanged second request."""
         try:
             request = await reader.readline()
             observed.append(request)
@@ -282,6 +283,7 @@ async def test_otp_redirect_reconnects_and_preserves_identity(socket_enabled, ca
     hosts = []
 
     async def connect(host, port, **kwargs):
+        """Check TLS routing arguments while using the synthetic local server."""
         hosts.append(host)
         assert kwargs["ssl"].verify_mode == ssl.CERT_REQUIRED
         assert kwargs["server_hostname"] == host
@@ -340,6 +342,8 @@ async def test_otp_routing_rejects_loops_limits_and_untrusted_hosts(
     assert client.connect.await_count == connections
     assert client.close.await_count == connections
     assert client._exchange.await_count == len(replies)
+    expected = call("v3_otp", "PRIVATEUUID", "email", "private@example.test", "6")
+    assert client._exchange.await_args_list == [expected] * len(replies)
 
 
 @pytest.mark.parametrize("cancel", [False, True])
@@ -355,4 +359,6 @@ async def test_otp_routing_connect_failure_and_cancellation(cancel):
         await client.request_code("PRIVATEUUID", "private@example.test")
     client.close.assert_awaited_once()
     client.connect.assert_awaited_once()
-    client._exchange.assert_awaited_once()
+    client._exchange.assert_awaited_once_with(
+        "v3_otp", "PRIVATEUUID", "email", "private@example.test", "6"
+    )
