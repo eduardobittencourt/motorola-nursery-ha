@@ -40,6 +40,10 @@ suffix before decoding the stream, including when it is fragmented or arrives
 with the first encrypted bytes. Bytes that do not match the optional echo are
 preserved as cipher input, including a cipher prefix beginning with a space.
 A matching echo with an invalid delimiter or truncated by EOF fails on receive.
+The first receive has a separate eight-second deadline covering the optional
+echo and initial cipher prefix through the first decoded data. Expiry closes
+the tunnel, allowing the bridge to release its slot. Sending RTSP never waits
+for the echo; subsequent receives have no initial-response deadline.
 
 Local debug diagnostics distinguish credential validation, TCP connect,
 handshake send, handshake receive and handshake validation, with an overall

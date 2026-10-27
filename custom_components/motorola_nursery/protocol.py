@@ -202,6 +202,7 @@ class MagicP2PTunnel:
         writer: asyncio.StreamWriter,
         token: bytes,
     ) -> None:
+        """Initialize directional cipher state and optional ACK tracking."""
         self._reader = reader
         self._writer = writer
         self._encoder = MagicCipher(token)
@@ -210,6 +211,7 @@ class MagicP2PTunnel:
         self._receive_lock = asyncio.Lock()
         self._handshake_echo: bytes | None = None
         self._handshake_pending = bytearray()
+        self._first_response = True
 
     def _consume_handshake_echo(self, data: bytes) -> bytes:
         """Strip an optional SID echo without losing fragmented cipher bytes."""
@@ -355,17 +357,28 @@ class MagicP2PTunnel:
         async with self._receive_lock:
             if self._writer.is_closing():
                 raise ConnectionError("Camera tunnel is closed")
-            while encrypted := await self._reader.read(65536):
-                encrypted = self._consume_handshake_echo(encrypted)
-                if not encrypted:
-                    continue
-                if plain := await self._transform(
-                    self._decoder, encrypted, encode=False
+            try:
+                async with asyncio.timeout(
+                    CONNECT_TIMEOUT if self._first_response else None
                 ):
-                    return plain
-            if self._handshake_pending:
-                raise EOFError("Incomplete MagicP2P acknowledgement suffix")
-            return b""
+                    while encrypted := await self._reader.read(65536):
+                        encrypted = self._consume_handshake_echo(encrypted)
+                        if not encrypted:
+                            continue
+                        if plain := await self._transform(
+                            self._decoder, encrypted, encode=False
+                        ):
+                            self._first_response = False
+                            return plain
+                    if self._handshake_pending:
+                        raise EOFError("Incomplete MagicP2P acknowledgement suffix")
+                    return b""
+            except TimeoutError:
+                self._writer.close()
+                _LOGGER.debug(
+                    "Local tunnel failed: stage=first_response category=timeout"
+                )
+                raise
 
     async def close(self) -> None:
         """Close the camera transport."""

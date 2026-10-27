@@ -95,6 +95,7 @@ async def test_local_handshake_failures_preserve_stage_and_redact_response(
     remainder = b""
 
     async def read(size):
+        """Model bounded socket reads and injected receive failures."""
         nonlocal remainder
         chunk = remainder or next(chunks, None)
         if chunk is None:
@@ -148,6 +149,7 @@ async def test_local_handshake_fragmented_success(
 
     # Feed fragments over separate loop turns, followed by tunnel data.
     async def feed():
+        """Deliver the extended ACK and cipher payload in separate chunks."""
         for chunk in (reply[:4], reply[4:21], reply[21:] + encrypted):
             reader.feed_data(chunk)
             await asyncio.sleep(0)
@@ -218,6 +220,7 @@ async def test_ack_and_cipher_fragmentation(
     reply = ack + (b" " + sid + b"\n" if long_ack else b"") + encrypted
 
     async def feed():
+        """Split the acknowledgement and payload at the selected boundary."""
         reader.feed_data(reply[:split])
         await asyncio.sleep(0)
         reader.feed_data(reply[split:])
@@ -247,6 +250,7 @@ async def test_camera_waits_for_rtsp_after_ack(monkeypatch, long_ack):
     finished = asyncio.get_running_loop().create_future()
 
     async def camera(reader, writer):
+        """Wait for a client request before sending the optional echo and RTSP."""
         try:
             handshake = await reader.readexactly(139)
             writer.write(b"ok 0 dconn")
@@ -309,6 +313,65 @@ async def test_invalid_optional_echo(monkeypatch, local_credentials, suffix):
     with pytest.raises((EOFError, ConnectionError)) as caught:
         await tunnel.receive()
     assert sid.decode() not in str(caught.value)
+    await tunnel.close()
+
+
+@pytest.mark.parametrize("stalled", ["empty", "partial_echo", "echo", "cipher_prefix"])
+async def test_first_response_timeout(monkeypatch, caplog, local_credentials, stalled):
+    """A stalled echo or cipher prefix cannot occupy a tunnel indefinitely."""
+    caplog.set_level(logging.DEBUG, logger=protocol.__name__)
+    sid = protocol.generate_sid(local_credentials)
+    partial = {
+        "empty": b"",
+        "partial_echo": b" " + sid[:4],
+        "echo": b" " + sid + b"\n",
+        "cipher_prefix": b"\x80",
+    }[stalled]
+    reader = asyncio.StreamReader()
+    reader.feed_data(b"ok 0 dconn" + partial)
+    writer = Mock(
+        drain=AsyncMock(), wait_closed=AsyncMock(), is_closing=Mock(return_value=False)
+    )
+    monkeypatch.setattr(protocol, "CONNECT_TIMEOUT", 0.02)
+    monkeypatch.setattr(
+        asyncio, "open_connection", AsyncMock(return_value=(reader, writer))
+    )
+    tunnel = await protocol.MagicP2PTunnel.connect("private-host", local_credentials)
+    await tunnel.send(b"OPTIONS rtsp://camera/ RTSP/1.0\r\n\r\n")
+    with pytest.raises(TimeoutError):
+        await asyncio.wait_for(tunnel.receive(), 1)
+    writer.close.assert_called_once()
+    assert "stage=first_response category=timeout" in caplog.text
+    assert "private" not in caplog.text and sid.decode() not in caplog.text
+    await tunnel.close()
+
+
+async def test_first_response_deadline_does_not_limit_established_stream(
+    monkeypatch, local_credentials
+):
+    """Only the first decoded data has a deadline; later stream pauses work."""
+    reader = asyncio.StreamReader()
+    writer = Mock(
+        drain=AsyncMock(), wait_closed=AsyncMock(), is_closing=Mock(return_value=False)
+    )
+    encoder = protocol.MagicCipher(local_credentials.magic_token)
+    reader.feed_data(b"ok 0 dconn" + encoder.encode(b"first"))
+    monkeypatch.setattr(protocol, "CONNECT_TIMEOUT", 0.01)
+    monkeypatch.setattr(
+        asyncio, "open_connection", AsyncMock(return_value=(reader, writer))
+    )
+    tunnel = await protocol.MagicP2PTunnel.connect("private-host", local_credentials)
+    assert await tunnel.receive() == b"first"
+
+    async def delayed_data():
+        """Deliver stream data after the initial response budget has elapsed."""
+        await asyncio.sleep(0.03)
+        reader.feed_data(encoder.encode(b"second"))
+
+    feeder = asyncio.create_task(delayed_data())
+    assert await asyncio.wait_for(tunnel.receive(), 1) == b"second"
+    await feeder
+    writer.close.assert_not_called()
     await tunnel.close()
 
 

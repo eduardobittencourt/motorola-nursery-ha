@@ -6,6 +6,8 @@
   Android app, without waiting for an echoed SID before sending RTSP.
 - Preserve extended VM65 acknowledgements by stripping their optional SID echo
   before cipher decoding, including fragmented and coalesced stream data.
+- Bound the first post-ACK receive to eight seconds, including partial SID
+  echoes and cipher prefixes, without imposing a deadline on established video.
 - Add short/long ACK loopback round trips with 30-byte device identifiers,
   delayed SID echoes and fragmented cipher prefixes. VM85 operation still
   requires confirmation on the reporter's camera.

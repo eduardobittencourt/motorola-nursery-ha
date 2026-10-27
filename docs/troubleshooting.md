@@ -117,6 +117,7 @@ The existing network error can represent several different stages:
 | `handshake_send` | TCP opened, but sending the request failed. | Use the error category to investigate a reset, timeout or write failure. |
 | `handshake_receive` / `incomplete_response` or `timeout` | The request was sent but no complete acknowledgement arrived. | Inspect the safe response length and shape summary. |
 | `handshake_validate` / `unexpected_response` | The ten-byte reply differed from `ok 0 dconn`. | Compare the safe prefix/shape flags; this is not proof that the account password is wrong. |
+| `first_response` / `timeout` | The ACK succeeded, but no decoded stream data arrived within eight seconds of the first receive. | A stalled optional SID echo or cipher prefix can cause this; the tunnel closes and releases the bridge slot. |
 | `Local tunnel authenticated` | The v1 tunnel acknowledgement matched. | Confirm probe cleanup and setup completion, then test live video separately. |
 
 `Local tunnel response` reports received/expected byte counts, whitespace field
