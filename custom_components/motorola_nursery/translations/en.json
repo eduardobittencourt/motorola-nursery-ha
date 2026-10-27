@@ -53,7 +53,7 @@
       "cannot_connect_cloud": "Unable to reach Motorola. Try again.",
       "invalid_email": "Enter a valid email address.",
       "invalid_code": "The code is invalid or expired.",
-      "code_request_failed": "Motorola did not accept the code request. Wait before trying again.",
+      "code_request_failed": "The Motorola code request could not be completed. Enable debug logging and see the troubleshooting guide.",
       "cloud_error": "Motorola returned an unexpected response.",
       "invalid_host": "Enter an IP address or hostname, without a URL or port."
     },

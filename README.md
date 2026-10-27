@@ -153,6 +153,9 @@ development, testing and release maintenance. Contribution guidelines are in
 
 ## Support and security
 
+For account login failures, follow the [troubleshooting guide](docs/troubleshooting.md)
+to enable debug logging even when first setup cannot finish.
+
 Before opening a bug report, review the compatibility limits above and enable
 debug logging only for the shortest time needed. Remove account identifiers,
 camera addresses, stream URLs, email codes, tokens, and credentials from logs.

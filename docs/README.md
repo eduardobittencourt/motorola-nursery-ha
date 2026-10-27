@@ -5,6 +5,9 @@ the [project README](../README.md).
 
 ## Technical guides
 
+- [Account troubleshooting](troubleshooting.md): first-setup debug logging,
+  privacy-safe log collection, routing limitations and useful issue details.
+
 - [Protocol reference](protocol.md): local video transport, cloud account access,
   camera telemetry and events, verified field mappings and controls, and the
   limits of local telemetry research.

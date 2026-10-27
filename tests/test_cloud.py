@@ -1,8 +1,10 @@
 """Real stream framing tests against a synthetic in-process vendor server."""
 
 import asyncio
+import logging
+import socket
 import ssl
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -17,7 +19,8 @@ from custom_components.motorola_nursery.cloud import (
 
 
 @pytest.mark.asyncio
-async def test_login_resume_devices_and_idle_keepalive(socket_enabled):
+async def test_login_resume_devices_and_idle_keepalive(socket_enabled, caplog):
+    caplog.set_level(logging.DEBUG, logger="custom_components.motorola_nursery")
     observed = []
     peer_done = asyncio.Event()
 
@@ -96,6 +99,137 @@ async def test_login_resume_devices_and_idle_keepalive(socket_enabled):
         observed[1]
         == b"v3_loginset 123456 SYNTHETICUUID email owner@example.test 123456\n"
     )
+    assert "operation=v3_otp fields=3 first=numeric status=none" in caplog.text
+    assert "operation=v3_loginset fields=5" in caplog.text
+    assert "operation=v3_session fields=4" in caplog.text
+    assert "Account device listing accepted: devices=1" in caplog.text
+    for secret in (
+        "123456",
+        "SYNTHETICUUID",
+        "owner@example.test",
+        "synthetic-token",
+        "rotated-test-token",
+        "test-magic-token",
+        "camera-identifier",
+        "abcdefghijklmnopqrst",
+        "Nursery%20Test",
+    ):
+        assert secret not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("fields", "summary", "reason"),
+    [
+        (
+            ["-10", "private@example.test"],
+            "first=negative_status status=-10",
+            "server_rejected",
+        ),
+        (["-123456789"], "first=negative_status status=other", "server_rejected"),
+        (["-private-token"], "first=negative_status status=other", "server_rejected"),
+        ([], "first=empty status=none", "unexpected_response"),
+        (["private@example.test"], "first=text status=none", "unexpected_response"),
+        (["654321", "private-token"], "fields=2 first=numeric", "unexpected_response"),
+        (
+            ["654321", "private-token", "private.invalid"],
+            "fields=3",
+            "unsupported_routing_host",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_code_request_logs_are_actionable_without_payload(
+    fields, summary, reason, caplog
+):
+    caplog.set_level(logging.DEBUG, logger="custom_components.motorola_nursery")
+    client = CloudClient(ssl.create_default_context())
+    client._writer = Mock(drain=AsyncMock())
+    client._messages.put_nowait(["v3_otp", *fields])
+    with pytest.raises(CloudError):
+        await client.request_code("PRIVATEUUID", "private@example.test")
+    assert summary in caplog.text
+    assert f"reason={reason}" in caplog.text
+    assert "elapsed=" in caplog.text
+    for secret in (
+        "PRIVATEUUID",
+        "private@example.test",
+        "private-token",
+        "private.invalid",
+        "654321",
+        "123456789",
+    ):
+        assert secret not in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("error", "category"),
+    [
+        (socket.gaierror("private.invalid"), "dns"),
+        (ssl.SSLCertVerificationError("private.invalid"), "tls_certificate"),
+        (ssl.SSLError("private.invalid"), "tls"),
+        (ConnectionRefusedError("private.invalid"), "connection_refused"),
+        (TimeoutError("private.invalid"), "timeout"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_connection_failure_logs_only_safe_category(error, category, caplog):
+    caplog.set_level(logging.DEBUG, logger="custom_components.motorola_nursery")
+    client = CloudClient(ssl.create_default_context(), "other.moto.5gencare.com")
+    with (
+        patch("asyncio.open_connection", AsyncMock(side_effect=error)),
+        pytest.raises(type(error)),
+    ):
+        await client.connect()
+    assert f"route=vendor_routed category={category}" in caplog.text
+    assert "private.invalid" not in caplog.text
+    assert "other.moto.5gencare.com" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_request_timeout_and_reader_failure_are_distinct(caplog):
+    caplog.set_level(logging.DEBUG, logger="custom_components.motorola_nursery")
+    client = CloudClient(ssl.create_default_context())
+    client._writer = Mock(drain=AsyncMock())
+    with (
+        patch("custom_components.motorola_nursery.cloud.TIMEOUT", 0.001),
+        pytest.raises(TimeoutError),
+    ):
+        await client.request_code("PRIVATEUUID", "private@example.test")
+    assert "operation=v3_otp category=timeout" in caplog.text
+    reader = asyncio.StreamReader()
+    reader.feed_data(b"v3_otp private-token \xff\n")
+    await client._receive(reader)
+    with pytest.raises(ConnectionError):
+        await client.request_code("PRIVATEUUID", "private@example.test")
+    assert "reader stopped: category=protocol_frame" in caplog.text
+    assert "operation=v3_otp category=connection" in caplog.text
+    assert "private" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_routing_and_later_authentication_failures(caplog):
+    caplog.set_level(logging.DEBUG, logger="custom_components.motorola_nursery")
+    client = CloudClient(ssl.create_default_context())
+    client._writer = Mock(drain=AsyncMock())
+    client._messages.put_nowait(
+        ["v3_otp", "654321", "private-token", "other.moto.5gencare.com"]
+    )
+    challenge = await client.request_code("PRIVATEUUID", "private@example.test")
+    assert "accepted: redirect=True" in caplog.text
+    client.host = challenge.host
+    client._messages.put_nowait(["v3_loginset", "-10", "private-token"])
+    with pytest.raises(AuthenticationError):
+        await client.submit_code(
+            challenge, "PRIVATEUUID", "private@example.test", "654321"
+        )
+    assert "code submission failed: reason=server_rejected" in caplog.text
+    client.session = Session("654321", "private-token", "654322", client.host)
+    client._messages.put_nowait(["v3_dlist", "1"])
+    with pytest.raises(CloudError):
+        await client.devices()
+    assert "device listing failed: reason=unexpected_response" in caplog.text
+    for secret in ("654321", "PRIVATEUUID", "private-token", "private@example.test"):
+        assert secret not in caplog.text
 
 
 @pytest.mark.asyncio

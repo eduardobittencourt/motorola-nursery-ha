@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
+import socket
 import ssl
+import time
 from contextlib import suppress
 from dataclasses import dataclass, field
 from urllib.parse import unquote
@@ -13,6 +16,20 @@ DEFAULT_HOST = "9.moto.5gencare.com"
 PORT = 3388
 MAX_LINE = 65536
 TIMEOUT = 15
+_LOGGER = logging.getLogger(__name__)
+
+
+def _response_summary(fields: list[str]) -> tuple[str, str]:
+    """Classify responses without logging identifiers or arbitrary vendor text."""
+    if not fields:
+        return "empty", "none"
+    first = fields[0]
+    if first.startswith("-"):
+        # Only short negative numeric statuses can be exported. Positive numbers
+        # may be account IDs; text may echo email addresses, codes or tokens.
+        status = first if re.fullmatch(r"-[1-9][0-9]{0,3}", first) else "other"
+        return "negative_status", status
+    return ("numeric" if first.isdigit() else "text"), "none"
 
 
 class CloudError(Exception):
@@ -21,6 +38,21 @@ class CloudError(Exception):
 
 class AuthenticationError(CloudError):
     """The session or email code was rejected."""
+
+
+def _network_category(error: BaseException) -> str:
+    """Never format network exception text: it can contain private endpoints."""
+    if isinstance(error, ssl.SSLCertVerificationError):
+        return "tls_certificate"
+    if isinstance(error, ssl.SSLError):
+        return "tls"
+    if isinstance(error, TimeoutError):
+        return "timeout"
+    if isinstance(error, socket.gaierror):
+        return "dns"
+    if isinstance(error, ConnectionRefusedError):
+        return "connection_refused"
+    return "connection"
 
 
 def atom(value: str) -> str:
@@ -125,14 +157,33 @@ class CloudClient:
     async def connect(self) -> None:
         if self._writer is not None:
             raise RuntimeError("Client is already connected")
-        async with asyncio.timeout(TIMEOUT):
-            reader, self._writer = await asyncio.open_connection(
-                self.host,
-                PORT,
-                ssl=self._context,
-                server_hostname=self.host,
-                limit=MAX_LINE,
+        route = "bootstrap" if self.host == DEFAULT_HOST else "vendor_routed"
+        _LOGGER.debug(
+            "Account cloud connect: route=%s port=%d TLS=verified", route, PORT
+        )
+        started = time.monotonic()
+        try:
+            async with asyncio.timeout(TIMEOUT):
+                reader, self._writer = await asyncio.open_connection(
+                    self.host,
+                    PORT,
+                    ssl=self._context,
+                    server_hostname=self.host,
+                    limit=MAX_LINE,
+                )
+        except (OSError, TimeoutError) as err:
+            _LOGGER.debug(
+                "Account cloud connect failed: route=%s category=%s elapsed=%.3fs",
+                route,
+                _network_category(err),
+                time.monotonic() - started,
             )
+            raise
+        _LOGGER.debug(
+            "Account cloud connected: route=%s elapsed=%.3fs",
+            route,
+            time.monotonic() - started,
+        )
         self._reader_task = asyncio.create_task(self._receive(reader))
 
     async def _receive(self, reader: asyncio.StreamReader) -> None:
@@ -152,7 +203,15 @@ class CloudClient:
                     self._messages.put_nowait(parts)
         except asyncio.CancelledError:
             raise
-        except (OSError, ValueError, CloudError, asyncio.QueueFull):
+        except (OSError, ValueError, CloudError, asyncio.QueueFull) as err:
+            category = (
+                "protocol_frame"
+                if isinstance(err, (ValueError, CloudError))
+                else "queue_full"
+                if isinstance(err, asyncio.QueueFull)
+                else _network_category(err)
+            )
+            _LOGGER.debug("Account cloud reader stopped: category=%s", category)
             if self._messages.full():
                 self._messages.get_nowait()
             self._messages.put_nowait(ConnectionError("Cloud connection closed"))
@@ -174,29 +233,80 @@ class CloudClient:
         if self._writer is None:
             raise ConnectionError("Client is not connected")
         message = " ".join([atom(command), *(atom(value) for value in fields)]) + "\n"
-        async with asyncio.timeout(TIMEOUT):
-            self._writer.write(message.encode("ascii"))
-            await self._writer.drain()
-            for _ in range(128):
-                reply = await self._messages.get()
-                if isinstance(reply, Exception):
-                    raise reply
-                if reply[0] == command:
-                    return reply[1:]
-            raise CloudError("Too many unrelated protocol frames")
+        operation = (
+            command
+            if command in {"v3_otp", "v3_loginset", "v3_session", "v3_dlist"}
+            else "other"
+        )
+        started = time.monotonic()
+        _LOGGER.debug("Account request: operation=%s", operation)
+        try:
+            async with asyncio.timeout(TIMEOUT):
+                self._writer.write(message.encode("ascii"))
+                await self._writer.drain()
+                for skipped in range(128):
+                    reply = await self._messages.get()
+                    if isinstance(reply, Exception):
+                        raise reply
+                    if reply[0] == command:
+                        result = reply[1:]
+                        kind, status = _response_summary(result)
+                        _LOGGER.debug(
+                            "Account response: operation=%s fields=%d first=%s "
+                            "status=%s unrelated=%d elapsed=%.3fs",
+                            operation,
+                            len(result),
+                            kind,
+                            status,
+                            skipped,
+                            time.monotonic() - started,
+                        )
+                        return result
+                _LOGGER.debug(
+                    "Account request failed: operation=%s "
+                    "reason=too_many_unrelated_frames",
+                    operation,
+                )
+                raise CloudError("Too many unrelated protocol frames")
+        except (OSError, TimeoutError, EOFError) as err:
+            _LOGGER.debug(
+                "Account request failed: operation=%s category=%s elapsed=%.3fs",
+                operation,
+                _network_category(err),
+                time.monotonic() - started,
+            )
+            raise
 
     async def request_code(self, login_uuid: str, email: str) -> Challenge:
         """Send an email only following an explicit UI submission."""
         async with self._lock:
             fields = await self._exchange("v3_otp", login_uuid, "email", email, "6")
-            if len(fields) != 3 or not fields[0].isdigit():
+            if fields and fields[0].startswith("-"):
+                _LOGGER.debug("Account code request failed: reason=server_rejected")
                 raise CloudError("Email code request was not accepted")
-            return Challenge(fields[0], vendor_host(fields[2]))
+            if len(fields) != 3 or not fields[0].isdigit():
+                _LOGGER.debug(
+                    "Account code request failed: reason=unexpected_response "
+                    "expected_fields=3"
+                )
+                raise CloudError("Email code request was not accepted")
+            try:
+                host = vendor_host(fields[2])
+            except CloudError:
+                _LOGGER.debug(
+                    "Account code request failed: reason=unsupported_routing_host"
+                )
+                raise
+            _LOGGER.debug(
+                "Account code request accepted: redirect=%s", host != self.host
+            )
+            return Challenge(fields[0], host)
 
     async def submit_code(
         self, challenge: Challenge, login_uuid: str, email: str, code: str
     ) -> Session:
         if not re.fullmatch(r"[0-9]{6}", code):
+            _LOGGER.debug("Account code submission failed: reason=invalid_code_format")
             raise ValueError("Expected a six-digit email code")
         if challenge.host != self.host:
             raise CloudError("Incorrect challenge server")
@@ -205,8 +315,13 @@ class CloudClient:
                 "v3_loginset", challenge.user_id, login_uuid, "email", email, code
             )
             if fields and fields[0].startswith("-"):
+                _LOGGER.debug("Account code submission failed: reason=server_rejected")
                 raise AuthenticationError("Email code rejected")
             if len(fields) != 5 or fields[0] != challenge.user_id:
+                _LOGGER.debug(
+                    "Account code submission failed: "
+                    "reason=unexpected_response expected_fields=5"
+                )
                 raise CloudError("Unexpected login response")
             self.session = Session(
                 fields[0], atom(fields[1]), atom(fields[3]), vendor_host(fields[4])
@@ -221,8 +336,15 @@ class CloudClient:
                 "v3_session", session.user_id, session.token, session.session_id
             )
             if fields and fields[0].startswith("-"):
+                _LOGGER.debug(
+                    "Account session resumption failed: reason=server_rejected"
+                )
                 raise AuthenticationError("Session rejected")
             if len(fields) != 4 or fields[0] != session.user_id:
+                _LOGGER.debug(
+                    "Account session resumption failed: "
+                    "reason=unexpected_response expected_fields=4"
+                )
                 raise CloudError("Unexpected session response")
             self.session = Session(
                 fields[0], atom(fields[1]), atom(fields[2]), vendor_host(fields[3])
@@ -233,4 +355,13 @@ class CloudClient:
         if self.session is None:
             raise AuthenticationError("Authenticate before listing devices")
         async with self._lock:
-            return parse_devices(await self._exchange("v3_dlist"))
+            fields = await self._exchange("v3_dlist")
+            try:
+                devices = parse_devices(fields)
+            except CloudError:
+                _LOGGER.debug(
+                    "Account device listing failed: reason=unexpected_response"
+                )
+                raise
+            _LOGGER.debug("Account device listing accepted: devices=%d", len(devices))
+            return devices

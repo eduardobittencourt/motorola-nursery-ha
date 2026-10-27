@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 — 2026-10-26
+
+- Add privacy-safe account debug logs for connection failures, response structure,
+  vendor rejection statuses, login routing and request duration.
+- Include integration and HA versions in setup debug logs and diagnostics.
+- Replace the generic code-request cooldown advice with troubleshooting guidance;
+  document log collection before first setup completes and region limitations.
 
 - Organize protocol, development/validation and brand documentation under
   `docs/`, with an index and updated links from the README and contributor guide.
