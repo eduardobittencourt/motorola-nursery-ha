@@ -46,6 +46,9 @@ The account client uses certificate-verified TLS on port 3388, initially at
 
 - `v3_otp`: submit a fresh 32-character uppercase alphanumeric client identity,
   email address and six-digit code length; obtain user ID and routing host.
+  A two-field `-6 <vendor-host>` reply redirects this request: reconnect with
+  verified TLS and repeat the same identity/email, with at most two redirects
+  and no repeated hosts. Other negative replies remain errors.
 - `v3_loginset`: submit that identity, email and received code; obtain a session.
 - `v3_session`: resume with user ID, token and session ID. The replacement token
   must be saved before any subsequent network operation, including device listing.

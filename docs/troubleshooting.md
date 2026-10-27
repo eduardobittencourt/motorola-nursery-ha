@@ -8,7 +8,9 @@ Account setup contacts `9.moto.5gencare.com` over certificate-verified TLS on
 TCP port 3388. There is no hardcoded country, country code, language or region
 parameter in the login request. The vendor can return another server within
 `*.moto.5gencare.com`; the integration follows that route when submitting the
-code. Other routing domains are currently rejected. Other regions have not yet
+code. The `-6 <vendor-host>` code-request response also requires a reconnect
+before requesting the code; the integration follows up to two redirects and
+rejects loops. Other routing domains are currently rejected. Other regions have not yet
 been validated.
 
 A code-request error can mean a vendor rejection or an unexpected response,

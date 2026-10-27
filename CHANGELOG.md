@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Follow certificate-verified vendor routing replies during email-code requests,
+  preserving the login identity and rejecting routing loops and untrusted hosts.
+
 ## 0.5.2 — 2026-10-26
 
 - Add privacy-safe account debug logs for connection failures, response structure,
