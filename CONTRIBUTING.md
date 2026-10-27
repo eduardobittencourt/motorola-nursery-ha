@@ -26,8 +26,8 @@ libraries into the repository.
 
 The `main` branch requires pull requests and blocks force pushes and deletion.
 Merge requires an up-to-date branch, resolved review
-conversations, and passing HACS, Hassfest, minimum/current HA tests and both
-CodeQL analyses. No approving review is required. Use squash merge with a clear
+conversations, one approving review, and passing HACS, Hassfest, minimum/current
+HA tests, both CodeQL analyses and CodeRabbit checks. Use squash merge with a clear
 PR title and description; these become the commit title and body.
 
 - Keep changes focused and explain user-visible behavior.

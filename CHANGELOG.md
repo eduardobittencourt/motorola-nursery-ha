@@ -7,7 +7,6 @@
 - Include integration and HA versions in setup debug logs and diagnostics.
 - Replace the generic code-request cooldown advice with troubleshooting guidance;
   document log collection before first setup completes and region limitations.
-
 - Organize protocol, development/validation and brand documentation under
   `docs/`, with an index and updated links from the README and contributor guide.
 - Preserve the local telemetry investigation's results and limits in the protocol
