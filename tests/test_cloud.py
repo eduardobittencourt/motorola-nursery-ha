@@ -4,7 +4,7 @@ import asyncio
 import logging
 import socket
 import ssl
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 
@@ -252,3 +252,113 @@ def test_device_framing_and_injection():
     for value in ["a@example.test\nv3_dlist", "white space", "a\x00b"]:
         with pytest.raises(ValueError):
             atom(value)
+
+
+@pytest.mark.asyncio
+async def test_otp_redirect_reconnects_and_preserves_identity(socket_enabled, caplog):
+    """A real routed exchange discards bootstrap EOF and keeps one OTP identity."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.motorola_nursery")
+    observed = []
+    finished = asyncio.Event()
+
+    async def server(reader, writer):
+        """Redirect the first connection and accept the unchanged second request."""
+        try:
+            request = await reader.readline()
+            observed.append(request)
+            if len(observed) == 1:
+                writer.write(b"v3_otp -6 other.moto.5gencare.com\nv3_stale opaque\n")
+            else:
+                writer.write(b"v3_otp 654321 opaque other.moto.5gencare.com\n")
+            await writer.drain()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+            if len(observed) == 2:
+                finished.set()
+
+    listener = await asyncio.start_server(server, "127.0.0.1", 0)
+    address = listener.sockets[0].getsockname()
+    original_connect = asyncio.open_connection
+    hosts = []
+
+    async def connect(host, port, **kwargs):
+        """Check TLS routing arguments while using the synthetic local server."""
+        hosts.append(host)
+        assert kwargs["ssl"].verify_mode == ssl.CERT_REQUIRED
+        assert kwargs["server_hostname"] == host
+        return await original_connect(*address)
+
+    client = CloudClient(ssl.create_default_context())
+    try:
+        with patch("asyncio.open_connection", connect):
+            await client.connect()
+            challenge = await client.request_code("PRIVATEUUID", "private@example.test")
+        assert challenge.host == client.host == "other.moto.5gencare.com"
+        assert hosts == ["9.moto.5gencare.com", "other.moto.5gencare.com"]
+        assert len(observed) == 2 and observed[0] == observed[1]
+        assert "routing: redirect=1" in caplog.text
+        assert "code request accepted" in caplog.text
+        for secret in ("PRIVATEUUID", "private@example.test", "654321", challenge.host):
+            assert secret not in caplog.text
+        await asyncio.wait_for(finished.wait(), 1)
+    finally:
+        await client.close()
+        listener.close()
+        await listener.wait_closed()
+
+
+@pytest.mark.parametrize(
+    ("replies", "connections"),
+    [
+        ([["-6", "9.moto.5gencare.com"]], 0),
+        ([["-6", "other.moto.5gencare.com"], ["-6", "9.moto.5gencare.com"]], 1),
+        (
+            [
+                ["-6", "a.moto.5gencare.com"],
+                ["-6", "b.moto.5gencare.com"],
+                ["-6", "c.moto.5gencare.com"],
+            ],
+            2,
+        ),
+        ([["-6", "private.invalid"]], 0),
+        ([["-6", "other.moto.5gencare.com.evil.invalid"]], 0),
+        ([["-6"]], 0),
+        ([["-6", "other.moto.5gencare.com", "extra"]], 0),
+        ([["-10", "other.moto.5gencare.com"]], 0),
+    ],
+)
+@pytest.mark.asyncio
+async def test_otp_routing_rejects_loops_limits_and_untrusted_hosts(
+    replies, connections
+):
+    """Only the exact vendor routing response can cause a bounded reconnect."""
+    client = CloudClient(ssl.create_default_context())
+    client._exchange = AsyncMock(side_effect=replies)
+    client.connect = AsyncMock()
+    client.close = AsyncMock()
+    with pytest.raises(CloudError):
+        await client.request_code("PRIVATEUUID", "private@example.test")
+    assert client.connect.await_count == connections
+    assert client.close.await_count == connections
+    assert client._exchange.await_count == len(replies)
+    expected = call("v3_otp", "PRIVATEUUID", "email", "private@example.test", "6")
+    assert client._exchange.await_args_list == [expected] * len(replies)
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+@pytest.mark.asyncio
+async def test_otp_routing_connect_failure_and_cancellation(cancel):
+    """A redirect never retries an unavailable destination or swallows cancellation."""
+    client = CloudClient(ssl.create_default_context())
+    client._exchange = AsyncMock(return_value=["-6", "other.moto.5gencare.com"])
+    client.close = AsyncMock()
+    error = asyncio.CancelledError() if cancel else ConnectionRefusedError()
+    client.connect = AsyncMock(side_effect=error)
+    with pytest.raises(type(error)):
+        await client.request_code("PRIVATEUUID", "private@example.test")
+    client.close.assert_awaited_once()
+    client.connect.assert_awaited_once()
+    client._exchange.assert_awaited_once_with(
+        "v3_otp", "PRIVATEUUID", "email", "private@example.test", "6"
+    )

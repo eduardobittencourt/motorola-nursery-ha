@@ -16,6 +16,7 @@ DEFAULT_HOST = "9.moto.5gencare.com"
 PORT = 3388
 MAX_LINE = 65536
 TIMEOUT = 15
+MAX_OTP_REDIRECTS = 2
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -278,29 +279,56 @@ class CloudClient:
             raise
 
     async def request_code(self, login_uuid: str, email: str) -> Challenge:
-        """Send an email only following an explicit UI submission."""
+        """Follow bounded vendor OTP routing after an explicit email submission."""
         async with self._lock:
-            fields = await self._exchange("v3_otp", login_uuid, "email", email, "6")
-            if fields and fields[0].startswith("-"):
-                _LOGGER.debug("Account code request failed: reason=server_rejected")
-                raise CloudError("Email code request was not accepted")
-            if len(fields) != 3 or not fields[0].isdigit():
+            visited = {self.host}
+            for redirects in range(MAX_OTP_REDIRECTS + 1):
+                fields = await self._exchange("v3_otp", login_uuid, "email", email, "6")
+                if len(fields) == 2 and fields[0] == "-6":
+                    try:
+                        host = vendor_host(fields[1])
+                    except CloudError:
+                        _LOGGER.debug(
+                            "Account code request failed: "
+                            "reason=unsupported_routing_host"
+                        )
+                        raise
+                    if host in visited or redirects == MAX_OTP_REDIRECTS:
+                        _LOGGER.debug(
+                            "Account code request failed: reason=routing_loop_or_limit"
+                        )
+                        raise CloudError("Email code routing did not complete")
+                    visited.add(host)
+                    _LOGGER.debug(
+                        "Account code request routing: redirect=%d", redirects + 1
+                    )
+                    await self.close()
+                    # Discard old-server frames/EOF before opening the new route.
+                    self._messages = asyncio.Queue(64)
+                    self.host = host
+                    await self.connect()
+                    continue
+                if fields and fields[0].startswith("-"):
+                    _LOGGER.debug("Account code request failed: reason=server_rejected")
+                    raise CloudError("Email code request was not accepted")
+                if len(fields) != 3 or not fields[0].isdigit():
+                    _LOGGER.debug(
+                        "Account code request failed: reason=unexpected_response "
+                        "expected_fields=3"
+                    )
+                    raise CloudError("Email code request was not accepted")
+                try:
+                    host = vendor_host(fields[2])
+                except CloudError:
+                    _LOGGER.debug(
+                        "Account code request failed: reason=unsupported_routing_host"
+                    )
+                    raise
                 _LOGGER.debug(
-                    "Account code request failed: reason=unexpected_response "
-                    "expected_fields=3"
+                    "Account code request accepted: redirect=%s", host != self.host
                 )
-                raise CloudError("Email code request was not accepted")
-            try:
-                host = vendor_host(fields[2])
-            except CloudError:
-                _LOGGER.debug(
-                    "Account code request failed: reason=unsupported_routing_host"
-                )
-                raise
-            _LOGGER.debug(
-                "Account code request accepted: redirect=%s", host != self.host
-            )
-            return Challenge(fields[0], host)
+                return Challenge(fields[0], host)
+            raise CloudError("Email code routing did not complete")
 
     async def submit_code(
         self, challenge: Challenge, login_uuid: str, email: str, code: str

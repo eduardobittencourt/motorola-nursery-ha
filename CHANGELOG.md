@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.3 — 2026-10-27
+
+- Fix email-code requests for accounts routed to another Motorola server: treat
+  the exact `-6 <vendor-host>` response as a redirect instead of a rejection.
+- Reconnect with certificate-verified TLS and preserve the login identity, limit
+  redirects, reject repeated/untrusted hosts, and discard old-server messages.
+- Cover redirected requests, stale frames, loops, limits, failed connections,
+  cancellation and log privacy with synthetic tests. Document account routing.
+
 ## 0.5.2 — 2026-10-26
 
 - Add privacy-safe account debug logs for connection failures, response structure,
