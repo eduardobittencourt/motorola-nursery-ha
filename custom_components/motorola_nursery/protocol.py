@@ -47,11 +47,11 @@ def _connection_category(error: BaseException) -> str:
 
 def _log_handshake_response(response: bytes, sid: bytes, expected: int) -> None:
     """Describe bounded framing only; never log response bytes or identifiers."""
-    prefix = b"ok 0 dconn "
+    prefix = b"ok 0 dconn"
     fields = response.split()
     first = fields[0] if fields else b""
     negative = first.startswith(b"-") and first[1:].isdigit()
-    if response.startswith(prefix):
+    if response.lower().startswith(prefix):
         shape = "expected_prefix"
     elif negative:
         shape = "negative_status"
@@ -67,7 +67,9 @@ def _log_handshake_response(response: bytes, sid: bytes, expected: int) -> None:
         expected,
         len(fields),
         shape,
-        response[len(prefix) : len(prefix) + len(sid)] == sid,
+        response[len(prefix) + 1 : len(prefix) + 1 + len(sid)] == sid
+        if len(response) >= len(prefix) + 1 + len(sid)
+        else "not_present",
         delimiter,
     )
 
@@ -200,12 +202,39 @@ class MagicP2PTunnel:
         writer: asyncio.StreamWriter,
         token: bytes,
     ) -> None:
+        """Initialize directional cipher state and optional ACK tracking."""
         self._reader = reader
         self._writer = writer
         self._encoder = MagicCipher(token)
         self._decoder = MagicCipher(token)
         self._send_lock = asyncio.Lock()
         self._receive_lock = asyncio.Lock()
+        self._handshake_echo: bytes | None = None
+        self._handshake_pending = bytearray()
+        self._first_response = True
+
+    def _consume_handshake_echo(self, data: bytes) -> bytes:
+        """Strip an optional SID echo without losing fragmented cipher bytes."""
+        if self._handshake_echo is None:
+            return data
+        self._handshake_pending.extend(data)
+        echo = self._handshake_echo
+        pending = self._handshake_pending
+        compared = min(len(pending), len(echo))
+        if pending[:compared] == echo[:compared]:
+            if len(pending) <= len(echo):
+                return b""
+            if pending[len(echo) : len(echo) + 1] not in (b"\n", b"\r", b"\0", b" "):
+                raise ConnectionError("Invalid MagicP2P acknowledgement delimiter")
+            data = bytes(pending[len(echo) + 1 :])
+            _LOGGER.debug("Local tunnel acknowledgement suffix: format=sid_echo")
+        else:
+            # A short ACK has no echo; these bytes belong to the cipher prefix.
+            data = bytes(pending)
+            _LOGGER.debug("Local tunnel acknowledgement suffix: format=none")
+        self._handshake_echo = None
+        pending.clear()
+        return data
 
     async def _transform(
         self, cipher: MagicCipher, data: bytes, *, encode: bool
@@ -271,9 +300,9 @@ class MagicP2PTunnel:
                     len(sid),
                 )
                 stage = "handshake_receive"
-                expected = len(b"ok 0 dconn ") + len(sid) + 1
-                # Keep partial framing observable even when the peer stalls.
-                # Read exactly the existing response size, leaving stream data alone.
+                # The Android native LAN path compares these ten bytes only.
+                # Do not wait for an SID echo: short-ACK peers wait for RTSP next.
+                expected = len(b"ok 0 dconn")
                 while len(response) < expected:
                     chunk = await reader.read(expected - len(response))
                     if not chunk:
@@ -281,14 +310,12 @@ class MagicP2PTunnel:
                     response.extend(chunk)
                 stage = "handshake_validate"
                 _log_handshake_response(bytes(response), sid, expected)
-                if response[:-1] != b"ok 0 dconn " + sid or response[-1:] not in (
-                    b"\n",
-                    b"\r",
-                    b"\0",
-                    b" ",
-                ):
+                if response.lower() != b"ok 0 dconn":
                     raise ConnectionError("Camera rejected the MagicP2P handshake")
             tunnel = cls(reader, writer, credentials.magic_token)
+            # VM65 firmware appends a space, SID and delimiter. Consume it on
+            # receive, after allowing the client to send its first RTSP request.
+            tunnel._handshake_echo = b" " + sid
             connected = True
             _LOGGER.debug(
                 "Local tunnel authenticated: elapsed=%.3fs", time.monotonic() - started
@@ -330,12 +357,28 @@ class MagicP2PTunnel:
         async with self._receive_lock:
             if self._writer.is_closing():
                 raise ConnectionError("Camera tunnel is closed")
-            while encrypted := await self._reader.read(65536):
-                if plain := await self._transform(
-                    self._decoder, encrypted, encode=False
+            try:
+                async with asyncio.timeout(
+                    CONNECT_TIMEOUT if self._first_response else None
                 ):
-                    return plain
-            return b""
+                    while encrypted := await self._reader.read(65536):
+                        encrypted = self._consume_handshake_echo(encrypted)
+                        if not encrypted:
+                            continue
+                        if plain := await self._transform(
+                            self._decoder, encrypted, encode=False
+                        ):
+                            self._first_response = False
+                            return plain
+                    if self._handshake_pending:
+                        raise EOFError("Incomplete MagicP2P acknowledgement suffix")
+                    return b""
+            except TimeoutError:
+                self._writer.close()
+                _LOGGER.debug(
+                    "Local tunnel failed: stage=first_response category=timeout"
+                )
+                raise
 
     async def close(self) -> None:
         """Close the camera transport."""
