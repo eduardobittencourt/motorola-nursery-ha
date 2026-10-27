@@ -42,7 +42,8 @@ available. Use this method instead; it does not require another restart:
 4. Open **Settings > System > Logs**, select **Home Assistant Core** if a source
    selector is present, and use **Download full logs**. Filter the downloaded
    file to lines containing `custom_components.motorola_nursery` around the
-   attempt. The new account messages start with `Account`.
+   attempt. Account messages start with `Account`; local connection messages
+   start with `Local tunnel` or `Local camera probe`.
 5. Restore the log level with the same action, changing `debug` to `warning`.
    If you previously configured another level, restore that level instead.
 6. Review the selected lines and attach them as a `.txt` file to the issue.
@@ -98,6 +99,52 @@ that Home Assistant can reach. Report whether setup accepts that address, then
 whether opening the camera produces live video. A local connection failure is
 a separate stage from account login or device listing. Include the camera
 firmware if the app displays it, but do not send credentials or serial numbers.
+
+## Camera listed, but local connection fails
+
+Version `0.5.6b1` adds local connection diagnostics. Enable integration debug
+logging as described above, then submit the camera address once. If the setup
+form is still open, retry that step without requesting another email code.
+Share the reviewed `Local camera probe` and `Local tunnel` lines from that
+attempt, along with the integration version and camera firmware version.
+
+The existing network error can represent several different stages:
+
+| Log stage/category | What it establishes | Next check |
+| --- | --- | --- |
+| `tcp_connect` / `dns` | Hostname resolution failed. | Verify the hostname from the HA environment. |
+| `tcp_connect` / `connection_refused`, `unreachable` or `timeout` | The local TCP service was not reached. | Check camera TCP port 77 from the HA container/host, network isolation and service availability. A successful ping does not prove TCP access. |
+| `handshake_send` | TCP opened, but sending the request failed. | Use the error category to investigate a reset, timeout or write failure. |
+| `handshake_receive` / `incomplete_response` or `timeout` | The request was sent but no complete acknowledgement arrived. | Inspect the safe response length and shape summary. |
+| `handshake_validate` / `unexpected_response` | A full-length reply differed from the expected acknowledgement. | Compare framing, SID-match and delimiter flags; this is not proof that the account password is wrong. |
+| `Local tunnel authenticated` | The v1 tunnel acknowledgement matched. | Confirm probe cleanup and setup completion, then test live video separately. |
+
+`Local tunnel response` reports received/expected byte counts, whitespace field
+count, prefix shape (`expected_prefix`, `negative_status`, `other`, `empty`), a
+SID-match boolean and an allowlisted delimiter category. Unknown reply contents
+and numeric statuses are not printed. A short error reply may remain pending
+until EOF or the connection timeout; its summary still identifies a short reply.
+If authentication succeeds but `Local camera probe closing` is followed by a
+probe failure, the error occurred during teardown rather than authentication.
+
+These logs narrow the investigation; they do not prove another transport is
+required. No packet capture or raw handshake is needed for the first report.
+
+## Testing a beta release
+
+Diagnostic betas such as `0.5.6b1` are GitHub prereleases. The current stable
+release remains available; a beta is not a confirmed VM85 compatibility fix.
+
+In HACS, find Motorola Nursery, open the three-dot menu and choose **Redownload**.
+Under **Need a different version?**, select the requested beta tag. If it is
+missing, use **Update information** and enable beta/prerelease visibility if
+your HACS version offers that option. Confirm the exact beta version before
+downloading, then restart Home Assistant. See the official
+[HACS version-selection guide](https://www.hacs.xyz/docs/use/repositories/dashboard/#downloading-a-specific-version-of-a-repository).
+
+Enable debug logging, reproduce the requested step once, review/share only the
+integration lines, then restore your previous log level. To return to stable,
+use the same version selector to choose the stable release and restart HA.
 
 ## What to include in an issue
 

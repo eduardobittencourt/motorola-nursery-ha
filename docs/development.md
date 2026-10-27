@@ -93,6 +93,14 @@ release with a matching version tag (`vX.Y.Z` for manifest version `X.Y.Z`).
 pushing a tag alone does not publish an update. Normal releases do not require
 another catalog submission.
 
+Use beta prereleases for diagnostic iterations that still need device-owner
+testing. Keep manifest and tag aligned (for example `0.5.6b1` and `v0.5.6b1`),
+publish with GitHub's prerelease flag and do not mark the beta as latest.
+Increment `b2`, `b3`, etc. for further iterations; publish the final patch version
+after validation. Beta releases follow the same PR review and CI requirements.
+Include beta installation and stable rollback instructions in the release notes;
+see [troubleshooting](troubleshooting.md#testing-a-beta-release).
+
 When changing the minimum Home Assistant version, keep `hacs.json`, the README
 and the minimum CI test environment aligned. Preserve the integration domain
 and repository path used by existing installations.

@@ -90,6 +90,40 @@ def make_flow(hass, source="user", entry=None):
     return flow
 
 
+@pytest.mark.parametrize("step", ["host", "change_host"])
+@pytest.mark.parametrize("failure", ["connect", "close"])
+async def test_local_probe_failure_logs_context_and_allows_retry(
+    hass, caplog, step, failure
+):
+    """Local failures preserve setup state and never expose private values."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.motorola_nursery")
+    original = {**device_data(DEVICE), "host": "192.0.2.10"}
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=DEVICE.sid_device, data=original)
+    entry.add_to_hass(hass)
+    flow = make_flow(hass, config_entries.SOURCE_RECONFIGURE, entry)
+    flow._selected = DEVICE
+    flow._session = SESSION
+    tunnel = AsyncMock()
+    connect = AsyncMock(return_value=tunnel)
+    if failure == "connect":
+        connect.side_effect = ConnectionRefusedError("private-host")
+    else:
+        tunnel.close.side_effect = ConnectionResetError("private-host")
+    with patch(
+        "custom_components.motorola_nursery.config_flow.MagicP2PTunnel.connect", connect
+    ):
+        result = await getattr(flow, f"async_step_{step}")({"host": "192.0.2.11"})
+    source = "account_setup" if step == "host" else "change_host"
+    assert f"Local camera probe started: source={source}" in caplog.text
+    assert "Local camera probe failed: category=connection" in caplog.text
+    assert ("Local camera probe closing:" in caplog.text) == (failure == "close")
+    assert result["step_id"] == step
+    assert result["errors"] == {"base": "cannot_connect"}
+    assert entry.data == original
+    assert flow._session == SESSION and flow._selected == DEVICE
+    assert "private" not in caplog.text and "192.0.2" not in caplog.text
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "model,sid_device",

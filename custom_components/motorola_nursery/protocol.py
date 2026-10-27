@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import errno
 import hashlib
 import hmac
+import logging
 import os
+import socket
+import time
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass
 
 CAMERA_PORT = 77
@@ -15,6 +20,56 @@ CONNECT_TIMEOUT = 8
 # Supported input sizes, not the minimum padding widths used in generate_sid.
 MIN_SID_DEVICE_LENGTH = 3
 MAX_SID_DEVICE_LENGTH = 30
+_LOGGER = logging.getLogger(__name__)
+
+
+def _connection_category(error: BaseException) -> str:
+    """Classify failures without exporting exception text or private endpoints."""
+    if isinstance(error, TimeoutError):
+        return "timeout"
+    if isinstance(error, socket.gaierror):
+        return "dns"
+    if isinstance(error, ConnectionRefusedError):
+        return "connection_refused"
+    if isinstance(error, ConnectionResetError):
+        return "connection_reset"
+    if isinstance(error, EOFError):
+        return "incomplete_response"
+    if isinstance(error, ValueError):
+        return "invalid_parameters"
+    if isinstance(error, OSError):
+        if error.errno in (errno.ENETUNREACH, errno.EHOSTUNREACH):
+            return "unreachable"
+        if error.errno in (errno.EACCES, errno.EPERM):
+            return "permission"
+    return "connection"
+
+
+def _log_handshake_response(response: bytes, sid: bytes, expected: int) -> None:
+    """Describe bounded framing only; never log response bytes or identifiers."""
+    prefix = b"ok 0 dconn "
+    fields = response.split()
+    first = fields[0] if fields else b""
+    negative = first.startswith(b"-") and first[1:].isdigit()
+    if response.startswith(prefix):
+        shape = "expected_prefix"
+    elif negative:
+        shape = "negative_status"
+    else:
+        shape = "other" if response else "empty"
+    delimiter = {b"\n": "lf", b"\r": "cr", b"\0": "nul", b" ": "space"}.get(
+        response[-1:], "other" if response else "missing"
+    )
+    _LOGGER.debug(
+        "Local tunnel response: received_bytes=%d expected_bytes=%d "
+        "fields=%d shape=%s sid_matches=%s delimiter=%s",
+        len(response),
+        expected,
+        len(fields),
+        shape,
+        response[len(prefix) : len(prefix) + len(sid)] == sid,
+        delimiter,
+    )
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -183,14 +238,49 @@ class MagicP2PTunnel:
         target_port: int = INTERNAL_RTSP_PORT,
     ) -> MagicP2PTunnel:
         """Open and authenticate a local camera connection."""
-        credentials.validate()
-        async with asyncio.timeout(CONNECT_TIMEOUT):
-            reader, writer = await asyncio.open_connection(host, CAMERA_PORT)
-            try:
+        started = time.monotonic()
+        stage = "credentials"
+        writer = None
+        connected = False
+        response = bytearray()
+        sid = b""
+        expected = 0
+        _LOGGER.debug(
+            "Local tunnel connect: transport=magicp2p_v1 camera_port=%d "
+            "target_port=%d timeout=%s",
+            CAMERA_PORT,
+            target_port,
+            CONNECT_TIMEOUT,
+        )
+        try:
+            credentials.validate()
+            async with asyncio.timeout(CONNECT_TIMEOUT):
+                stage = "tcp_connect"
+                reader, writer = await asyncio.open_connection(host, CAMERA_PORT)
+                _LOGGER.debug(
+                    "Local tunnel TCP connected: elapsed=%.3fs",
+                    time.monotonic() - started,
+                )
+                stage = "handshake_send"
                 request, sid = build_handshake(credentials, target_port=target_port)
                 writer.write(request)
                 await writer.drain()
-                response = await reader.readexactly(len(b"ok 0 dconn ") + len(sid) + 1)
+                _LOGGER.debug(
+                    "Local tunnel handshake sent: request_bytes=%d sid_bytes=%d",
+                    len(request),
+                    len(sid),
+                )
+                stage = "handshake_receive"
+                expected = len(b"ok 0 dconn ") + len(sid) + 1
+                # Keep partial framing observable even when the peer stalls.
+                # Read exactly the existing response size, leaving stream data alone.
+                while len(response) < expected:
+                    chunk = await reader.read(expected - len(response))
+                    if not chunk:
+                        raise asyncio.IncompleteReadError(bytes(response), expected)
+                    response.extend(chunk)
+                stage = "handshake_validate"
+                _log_handshake_response(bytes(response), sid, expected)
                 if response[:-1] != b"ok 0 dconn " + sid or response[-1:] not in (
                     b"\n",
                     b"\r",
@@ -198,11 +288,33 @@ class MagicP2PTunnel:
                     b" ",
                 ):
                     raise ConnectionError("Camera rejected the MagicP2P handshake")
-            except BaseException:
+            tunnel = cls(reader, writer, credentials.magic_token)
+            connected = True
+            _LOGGER.debug(
+                "Local tunnel authenticated: elapsed=%.3fs", time.monotonic() - started
+            )
+            return tunnel
+        except asyncio.CancelledError:
+            _LOGGER.debug("Local tunnel cancelled: stage=%s", stage)
+            raise
+        except (OSError, EOFError, ValueError) as err:
+            if stage == "handshake_receive":
+                _log_handshake_response(bytes(response), sid, expected)
+            _LOGGER.debug(
+                "Local tunnel failed: stage=%s category=%s elapsed=%.3fs",
+                stage,
+                "unexpected_response"
+                if stage == "handshake_validate"
+                else _connection_category(err),
+                time.monotonic() - started,
+            )
+            raise
+        finally:
+            if writer is not None and not connected:
                 writer.close()
-                await writer.wait_closed()
-                raise
-        return cls(reader, writer, credentials.magic_token)
+                with suppress(OSError, TimeoutError):
+                    async with asyncio.timeout(CONNECT_TIMEOUT):
+                        await writer.wait_closed()
 
     async def send(self, data: bytes) -> None:
         """Encode and forward plaintext bytes to the camera."""
