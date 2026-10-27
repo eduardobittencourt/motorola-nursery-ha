@@ -49,11 +49,12 @@ Local debug diagnostics distinguish credential validation, TCP connect,
 handshake send, handshake receive and handshake validation, with an overall
 eight-second connection deadline. The initial acknowledgement read is bounded
 to ten bytes and leaves subsequent bytes for the receive path. Logs expose only
-counts and allowlisted framing categories; `sid_matches=not_present` means the
-initial acknowledgement does not carry the echo. `Local tunnel acknowledgement
+counts and allowlisted prefix/shape categories. `Local tunnel acknowledgement
 suffix` distinguishes `sid_echo` from `none` when stream data arrives. Logs never
 include raw bytes, SID, tokens, endpoints or exception text. A successful
-acknowledgement does not prove working RTSP or physical VM85 compatibility.
+acknowledgement alone does not prove working RTSP; a VM85CONNECT owner separately
+confirmed setup and live video on firmware V1.6.45 / HA 2026.10.4 in
+[issue #18](https://github.com/eduardobittencourt/motorola-nursery-ha/issues/18#issuecomment-6452538946).
 
 The integration uses internal RTSP port 6667. A loopback-only RTSP bridge feeds
 an on-demand FFmpeg relay, which copies H.264 video and converts PCMA audio to
@@ -100,8 +101,10 @@ not a maximum identifier size. Its SID output matches the existing algorithm
 with the full 30-byte value; synthetic native reference vectors cover both
 20 and 30 bytes. The accepted maximum of 30 is a supported-input bound, not a
 claimed vendor protocol maximum. No credentials are truncated and the v1
-handshake and cipher remain unchanged. This fixes the observed list rejection;
-VM85 local connection, video and controls still require physical validation.
+SID generation and cipher are unchanged. Version 0.5.6 also accepts the short
+local acknowledgement described above. The owner confirmed VM85 account setup
+and live video; temperature and motion appeared correct in an initial check.
+VM85 writable controls, PTZ, audio and prolonged operation remain unverified.
 
 Debug logs describe declared/expected/received field counts, zero-based record
 index, field lengths and kinds (`empty`, `decimal`, `negative_decimal`, `text`),
@@ -118,8 +121,15 @@ does not specify `v3_dlist`, tunnel credential sizes or local RTSP endpoints.
 Using the same app does not prove matching camera firmware or tunnel behavior.
 The [VM85 product page](https://www.motorolanursery.com/nursery-care-products/connected-video-baby-monitors/vm85-connect)
 also describes motorised pan and digital tilt, so VM65 physical PTZ validation
-must not be applied to VM85. VM85 remains physically unverified; logging its
-known family is diagnostic classification, not an enablement of model controls.
+must not be applied to VM85. Logging its known family is diagnostic
+classification, not an enablement of PTZ controls.
+
+Complementary public research in
+[Paradox101/motorola-babycam-ha-bridge](https://github.com/Paradox101/motorola-babycam-ha-bridge/blob/main/research/docs/magic-web2-protocol.md)
+documents the vendor's WEB2 relay path and a VM65 capture. It is a useful protocol
+reference; this integration uses the local LAN path and does not implement that
+relay transport. The short local ACK handling was checked against the Android
+2.2.18 native LAN implementation and then confirmed by the VM85 owner test.
 
 ## Camera telemetry and events
 

@@ -20,6 +20,7 @@ CONNECT_TIMEOUT = 8
 # Supported input sizes, not the minimum padding widths used in generate_sid.
 MIN_SID_DEVICE_LENGTH = 3
 MAX_SID_DEVICE_LENGTH = 30
+_LOCAL_ACK = b"ok 0 dconn"
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -45,32 +46,24 @@ def _connection_category(error: BaseException) -> str:
     return "connection"
 
 
-def _log_handshake_response(response: bytes, sid: bytes, expected: int) -> None:
+def _log_handshake_response(response: bytes, expected: int) -> None:
     """Describe bounded framing only; never log response bytes or identifiers."""
-    prefix = b"ok 0 dconn"
     fields = response.split()
     first = fields[0] if fields else b""
     negative = first.startswith(b"-") and first[1:].isdigit()
-    if response.lower().startswith(prefix):
+    if response.lower().startswith(_LOCAL_ACK):
         shape = "expected_prefix"
     elif negative:
         shape = "negative_status"
     else:
         shape = "other" if response else "empty"
-    delimiter = {b"\n": "lf", b"\r": "cr", b"\0": "nul", b" ": "space"}.get(
-        response[-1:], "other" if response else "missing"
-    )
+
     _LOGGER.debug(
-        "Local tunnel response: received_bytes=%d expected_bytes=%d "
-        "fields=%d shape=%s sid_matches=%s delimiter=%s",
+        "Local tunnel response: received_bytes=%d expected_bytes=%d fields=%d shape=%s",
         len(response),
         expected,
         len(fields),
         shape,
-        response[len(prefix) + 1 : len(prefix) + 1 + len(sid)] == sid
-        if len(response) >= len(prefix) + 1 + len(sid)
-        else "not_present",
-        delimiter,
     )
 
 
@@ -302,15 +295,15 @@ class MagicP2PTunnel:
                 stage = "handshake_receive"
                 # The Android native LAN path compares these ten bytes only.
                 # Do not wait for an SID echo: short-ACK peers wait for RTSP next.
-                expected = len(b"ok 0 dconn")
+                expected = len(_LOCAL_ACK)
                 while len(response) < expected:
                     chunk = await reader.read(expected - len(response))
                     if not chunk:
                         raise asyncio.IncompleteReadError(bytes(response), expected)
                     response.extend(chunk)
                 stage = "handshake_validate"
-                _log_handshake_response(bytes(response), sid, expected)
-                if response.lower() != b"ok 0 dconn":
+                _log_handshake_response(bytes(response), expected)
+                if response.lower() != _LOCAL_ACK:
                     raise ConnectionError("Camera rejected the MagicP2P handshake")
             tunnel = cls(reader, writer, credentials.magic_token)
             # VM65 firmware appends a space, SID and delimiter. Consume it on
@@ -326,7 +319,7 @@ class MagicP2PTunnel:
             raise
         except (OSError, EOFError, ValueError) as err:
             if stage == "handshake_receive":
-                _log_handshake_response(bytes(response), sid, expected)
+                _log_handshake_response(bytes(response), expected)
             _LOGGER.debug(
                 "Local tunnel failed: stage=%s category=%s elapsed=%.3fs",
                 stage,

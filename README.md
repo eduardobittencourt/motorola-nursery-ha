@@ -5,7 +5,9 @@
 
 Community Home Assistant integration for Motorola Nursery cameras that use the
 5GenCare MagicP2P tunnel. It provides local video plus optional cloud-backed
-telemetry, controls, and detection events. Tested with one VM65CONNECT.
+telemetry, controls, and detection events. Local video is verified on VM65CONNECT
+and confirmed by a VM85CONNECT owner. See [validation and limits](#validation-and-limits)
+for the features tested on each model.
 
 Video and audio still travel over the LAN; telemetry requires internet access
 and an account-linked entry. A telemetry outage does not interrupt local video.
@@ -137,6 +139,11 @@ email code always requires submitting the email form.
 - Compatibility has been tested with one VM65CONNECT, hardware V1.2.03 and
   firmware V1.6.37. Local snapshot/HLS with H.264 video and AAC mono audio,
   email-code login, telemetry and controls have been verified on this model.
+- A VM85CONNECT owner confirmed account setup, local connection and live video
+  on firmware V1.6.45 with Home Assistant 2026.10.4, using the 0.5.6b2 candidate
+  promoted to this stable release. Temperature and motion appeared correct in
+  the initial check; prolonged operation, audio and writable controls were not
+  separately validated. See the [confirmation in issue #18](https://github.com/eduardobittencourt/motorola-nursery-ha/issues/18#issuecomment-6452538946).
 - Automated tests use real Home Assistant lifecycle/config-flow infrastructure
   with synthetic camera/cloud responses. CI covers minimum-supported and current
   HA test environments; see [CONTRIBUTING.md](CONTRIBUTING.md).

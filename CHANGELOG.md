@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.6 — 2026-10-27
+
+- Complete VM85CONNECT local setup and video compatibility: accept the ten-byte
+  MagicP2P acknowledgement recognized by the Android app instead of requiring
+  an echoed SID. A VM85 owner confirmed setup and live video on firmware
+  V1.6.45 / Home Assistant 2026.10.4; temperature and motion appeared correct in
+  an initial check. VM85 controls, PTZ, audio and prolonged operation remain
+  unverified.
+- Preserve extended VM65 acknowledgements and fragmented/coalesced cipher data.
+  Bound the first decoded response wait to eight seconds and release stalled
+  tunnel connections without imposing that deadline on established video.
+- Include privacy-safe local connection diagnostics from the betas. Remove
+  obsolete initial ACK SID-match/delimiter fields and share the ACK prefix
+  constant between validation and diagnostics.
+- Document model-specific validation and complementary public protocol research.
+  The protocol candidate passed 176 tests in both HA environments and an isolated
+  physical VM65 video regression before promotion; see the beta history below.
+
 ## 0.5.6b2 — 2026-10-27
 
 - Accept the ten-byte local `ok 0 dconn` acknowledgement recognized by the

@@ -102,7 +102,9 @@ firmware if the app displays it, but do not send credentials or serial numbers.
 
 ## Camera listed, but local connection fails
 
-Version `0.5.6b1` adds local connection diagnostics. Enable integration debug
+Version `0.5.6` includes local connection diagnostics and accepts the short
+acknowledgement confirmed on VM85CONNECT. If an older version reports a
+10/90-byte incomplete reply, update and restart HA before retrying. Enable integration debug
 logging as described above, then submit the camera address once. If the setup
 form is still open, retry that step without requesting another email code.
 Share the reviewed `Local camera probe` and `Local tunnel` lines from that
@@ -121,13 +123,14 @@ The existing network error can represent several different stages:
 | `Local tunnel authenticated` | The v1 tunnel acknowledgement matched. | Confirm probe cleanup and setup completion, then test live video separately. |
 
 `Local tunnel response` reports received/expected byte counts, whitespace field
-count, prefix shape (`expected_prefix`, `negative_status`, `other`, `empty`), a
-`sid_matches` field and an allowlisted delimiter category. In 0.5.6b2 the
-expected acknowledgement is ten bytes; `sid_matches=not_present` is normal.
-After stream data arrives, `Local tunnel acknowledgement suffix` reports
-`sid_echo` for the extended reply or `none` for the short reply. Unknown reply contents
-and numeric statuses are not printed. A short error reply may remain pending
-until EOF or the connection timeout; its summary still identifies a short reply.
+count and prefix shape (`expected_prefix`, `negative_status`, `other`, `empty`).
+The expected acknowledgement is ten bytes. After stream data arrives,
+`Local tunnel acknowledgement suffix` reports `sid_echo` for the extended reply
+or `none` for the short reply. Betas also logged `sid_matches=not_present` and a
+delimiter category; these fields were removed in 0.5.6 because the ten-byte ACK
+contains no SID echo or delimiter. Unknown reply contents and numeric statuses
+are not printed. A short error reply may remain pending until EOF or the
+connection timeout; its summary still identifies a short reply.
 If authentication succeeds but `Local camera probe closing` is followed by a
 probe failure, the error occurred during teardown rather than authentication.
 
@@ -136,8 +139,10 @@ required. No packet capture or raw handshake is needed for the first report.
 
 ## Testing a beta release
 
-Betas such as `0.5.6b2` are GitHub prereleases. The current stable
-release remains available; a beta is not a confirmed VM85 compatibility fix.
+The 0.5.6 investigation betas were superseded by stable **0.5.6**, after a
+VM85CONNECT owner confirmed setup and live video. For normal installation, use
+the stable release. Future test betas are GitHub prereleases; the current stable
+release remains available while candidate fixes await device-owner validation.
 
 In HACS, find Motorola Nursery, open the three-dot menu and choose **Redownload**.
 Under **Need a different version?**, select the requested beta tag. If it is

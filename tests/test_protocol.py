@@ -162,7 +162,6 @@ async def test_local_handshake_fragmented_success(
     await feeder
     assert await tunnel.receive() == plaintext
     assert "received_bytes=10 expected_bytes=10" in caplog.text
-    assert "sid_matches=not_present" in caplog.text
     assert "Local tunnel authenticated" in caplog.text
     assert "private" not in caplog.text and sid.decode() not in caplog.text
     writer.close.assert_not_called()
