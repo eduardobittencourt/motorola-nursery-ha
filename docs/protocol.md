@@ -31,15 +31,25 @@ receive maintain separate cipher states. Each chunk is transformed in an
 executor worker, with a lock per direction to preserve ordering. Cancellation
 closes the tunnel and waits for the transform before releasing its state.
 
+The local acknowledgement is the ten-byte `ok 0 dconn` prefix, compared
+case-insensitively as in the Android 2.2.18 native LAN path. It does not require
+an echoed SID. This permits a camera to wait for the first RTSP request after
+sending only that prefix. VM65 firmware also sends a space, the 78-byte SID and
+one delimiter (LF, CR, NUL or space); the receive path strips that optional
+suffix before decoding the stream, including when it is fragmented or arrives
+with the first encrypted bytes. Bytes that do not match the optional echo are
+preserved as cipher input, including a cipher prefix beginning with a space.
+A matching echo with an invalid delimiter or truncated by EOF fails on receive.
+
 Local debug diagnostics distinguish credential validation, TCP connect,
-handshake send, handshake receive and handshake validation. The response read
-remains bounded to the existing 90-byte v1 acknowledgement, with an overall
-eight-second connection deadline. Partial replies are retained only in memory
-to report their length and framing on EOF or timeout. Logs expose only field
-count, allowlisted prefix/delimiter categories and a SID-match flag; they never
-include raw bytes, SID, tokens, endpoints or exception text. Authentication
-still requires the exact existing acknowledgement. These diagnostics do not
-select another transport or establish compatibility with another firmware.
+handshake send, handshake receive and handshake validation, with an overall
+eight-second connection deadline. The initial acknowledgement read is bounded
+to ten bytes and leaves subsequent bytes for the receive path. Logs expose only
+counts and allowlisted framing categories; `sid_matches=not_present` means the
+initial acknowledgement does not carry the echo. `Local tunnel acknowledgement
+suffix` distinguishes `sid_echo` from `none` when stream data arrives. Logs never
+include raw bytes, SID, tokens, endpoints or exception text. A successful
+acknowledgement does not prove working RTSP or physical VM85 compatibility.
 
 The integration uses internal RTSP port 6667. A loopback-only RTSP bridge feeds
 an on-demand FFmpeg relay, which copies H.264 video and converts PCMA audio to

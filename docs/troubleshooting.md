@@ -116,12 +116,15 @@ The existing network error can represent several different stages:
 | `tcp_connect` / `connection_refused`, `unreachable` or `timeout` | The local TCP service was not reached. | Check camera TCP port 77 from the HA container/host, network isolation and service availability. A successful ping does not prove TCP access. |
 | `handshake_send` | TCP opened, but sending the request failed. | Use the error category to investigate a reset, timeout or write failure. |
 | `handshake_receive` / `incomplete_response` or `timeout` | The request was sent but no complete acknowledgement arrived. | Inspect the safe response length and shape summary. |
-| `handshake_validate` / `unexpected_response` | A full-length reply differed from the expected acknowledgement. | Compare framing, SID-match and delimiter flags; this is not proof that the account password is wrong. |
+| `handshake_validate` / `unexpected_response` | The ten-byte reply differed from `ok 0 dconn`. | Compare the safe prefix/shape flags; this is not proof that the account password is wrong. |
 | `Local tunnel authenticated` | The v1 tunnel acknowledgement matched. | Confirm probe cleanup and setup completion, then test live video separately. |
 
 `Local tunnel response` reports received/expected byte counts, whitespace field
 count, prefix shape (`expected_prefix`, `negative_status`, `other`, `empty`), a
-SID-match boolean and an allowlisted delimiter category. Unknown reply contents
+`sid_matches` field and an allowlisted delimiter category. In 0.5.6b2 the
+expected acknowledgement is ten bytes; `sid_matches=not_present` is normal.
+After stream data arrives, `Local tunnel acknowledgement suffix` reports
+`sid_echo` for the extended reply or `none` for the short reply. Unknown reply contents
 and numeric statuses are not printed. A short error reply may remain pending
 until EOF or the connection timeout; its summary still identifies a short reply.
 If authentication succeeds but `Local camera probe closing` is followed by a
@@ -132,7 +135,7 @@ required. No packet capture or raw handshake is needed for the first report.
 
 ## Testing a beta release
 
-Diagnostic betas such as `0.5.6b1` are GitHub prereleases. The current stable
+Betas such as `0.5.6b2` are GitHub prereleases. The current stable
 release remains available; a beta is not a confirmed VM85 compatibility fix.
 
 In HACS, find Motorola Nursery, open the three-dot menu and choose **Redownload**.

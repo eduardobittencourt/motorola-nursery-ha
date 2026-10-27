@@ -68,17 +68,11 @@ async def test_local_tcp_failure_logs_safe_category(
     "kind,stage,category,shape",
     [
         ("empty", "handshake_receive", "incomplete_response", "empty"),
-        ("negative", "handshake_receive", "incomplete_response", "negative_status"),
-        ("partial_timeout", "handshake_receive", "timeout", "expected_prefix"),
+        ("negative", "handshake_validate", "unexpected_response", "negative_status"),
+        ("partial_timeout", "handshake_receive", "timeout", "other"),
         ("reset", "handshake_receive", "connection_reset", "empty"),
-        ("wrong_sid", "handshake_validate", "unexpected_response", "expected_prefix"),
         ("wrong_prefix", "handshake_validate", "unexpected_response", "other"),
-        (
-            "wrong_delimiter",
-            "handshake_validate",
-            "unexpected_response",
-            "expected_prefix",
-        ),
+        ("truncated", "handshake_receive", "incomplete_response", "other"),
         ("send", "handshake_send", "connection", None),
     ],
 )
@@ -91,26 +85,29 @@ async def test_local_handshake_failures_preserve_stage_and_redact_response(
     replies = {
         "empty": [b""],
         "negative": [b"-7 private-response\n", b""],
-        "partial_timeout": [b"ok 0 dconn "],
+        "partial_timeout": [b"ok 0 dcon"],
         "reset": [ConnectionResetError("private-response")],
-        "wrong_sid": [b"ok 0 dconn " + b"x" * len(sid) + b"\n"],
         "wrong_prefix": [b"private".ljust(11 + len(sid), b"x") + b"\n"],
-        "wrong_delimiter": [b"ok 0 dconn " + sid + b"!"],
+        "truncated": [b"ok 0 dcon", b""],
         "send": [],
     }
     chunks = iter(replies[kind])
+    remainder = b""
 
     async def read(size):
-        chunk = next(chunks, None)
+        nonlocal remainder
+        chunk = remainder or next(chunks, None)
         if chunk is None:
             await asyncio.Event().wait()
         if isinstance(chunk, BaseException):
             raise chunk
-        assert len(chunk) <= size
-        return chunk
+        remainder = chunk[size:]
+        return chunk[:size]
 
     reader = Mock(read=AsyncMock(side_effect=read))
-    writer = Mock(drain=AsyncMock(), wait_closed=AsyncMock())
+    writer = Mock(
+        drain=AsyncMock(), wait_closed=AsyncMock(), is_closing=Mock(return_value=False)
+    )
     if kind == "send":
         writer.drain.side_effect = OSError("private-send-error")
     # Teardown errors must not obscure the original failure.
@@ -124,9 +121,9 @@ async def test_local_handshake_failures_preserve_stage_and_redact_response(
     assert f"stage={stage} category={category}" in caplog.text
     if shape is not None:
         assert f"shape={shape}" in caplog.text
-        assert "expected_bytes=90" in caplog.text
+        assert "expected_bytes=10" in caplog.text
     if kind == "partial_timeout":
-        assert "received_bytes=11" in caplog.text
+        assert "received_bytes=9" in caplog.text
     assert "private" not in caplog.text
     assert sid.decode() not in caplog.text
     assert not any(record.exc_info for record in caplog.records)
@@ -141,13 +138,17 @@ async def test_local_handshake_fragmented_success(
     """All original terminators work without consuming post-handshake data."""
     caplog.set_level(logging.DEBUG, logger=protocol.__name__)
     sid = protocol.generate_sid(local_credentials)
+    plaintext = b"RTSP/1.0 200 OK\r\n\r\n"
+    encrypted = protocol.MagicCipher(local_credentials.magic_token).encode(plaintext)
     reply = b"ok 0 dconn " + sid + delimiter
     reader = asyncio.StreamReader()
-    writer = Mock(drain=AsyncMock(), wait_closed=AsyncMock())
+    writer = Mock(
+        drain=AsyncMock(), wait_closed=AsyncMock(), is_closing=Mock(return_value=False)
+    )
 
     # Feed fragments over separate loop turns, followed by tunnel data.
     async def feed():
-        for chunk in (reply[:4], reply[4:21], reply[21:] + b"extra"):
+        for chunk in (reply[:4], reply[4:21], reply[21:] + encrypted):
             reader.feed_data(chunk)
             await asyncio.sleep(0)
 
@@ -157,9 +158,9 @@ async def test_local_handshake_fragmented_success(
     feeder = asyncio.create_task(feed())
     tunnel = await protocol.MagicP2PTunnel.connect("private-host", local_credentials)
     await feeder
-    assert await reader.read(5) == b"extra"
-    assert "received_bytes=90 expected_bytes=90" in caplog.text
-    assert "sid_matches=True" in caplog.text
+    assert await tunnel.receive() == plaintext
+    assert "received_bytes=10 expected_bytes=10" in caplog.text
+    assert "sid_matches=not_present" in caplog.text
     assert "Local tunnel authenticated" in caplog.text
     assert "private" not in caplog.text and sid.decode() not in caplog.text
     writer.close.assert_not_called()
@@ -178,7 +179,9 @@ async def test_local_connect_cancellation_cleans_up(
         await asyncio.Event().wait()
 
     reader = Mock(read=AsyncMock(side_effect=read))
-    writer = Mock(drain=AsyncMock(), wait_closed=AsyncMock())
+    writer = Mock(
+        drain=AsyncMock(), wait_closed=AsyncMock(), is_closing=Mock(return_value=False)
+    )
     monkeypatch.setattr(
         asyncio, "open_connection", AsyncMock(return_value=(reader, writer))
     )
@@ -193,6 +196,120 @@ async def test_local_connect_cancellation_cleans_up(
     assert "Local tunnel failed" not in caplog.text
     writer.close.assert_called_once()
     writer.wait_closed.assert_awaited_once()
+
+
+@pytest.mark.parametrize("ack", [b"ok 0 dconn", b"OK 0 DCONN"])
+@pytest.mark.parametrize("long_ack", [False, True])
+@pytest.mark.parametrize("split", [1, 10, 11, 42, 89, 90])
+async def test_ack_and_cipher_fragmentation(
+    monkeypatch, local_credentials, ack, long_ack, split
+):
+    """Short/long acknowledgements preserve cipher bytes at every boundary."""
+    reader = asyncio.StreamReader()
+    writer = Mock(
+        drain=AsyncMock(), wait_closed=AsyncMock(), is_closing=Mock(return_value=False)
+    )
+    sid = protocol.generate_sid(local_credentials)
+    plaintext = b"RTSP/1.0 200 OK\r\n\r\n"
+    # A legitimate cipher prefix may start with a space, like the SID echo.
+    monkeypatch.setattr(protocol.os, "urandom", lambda size: bytes([11]) * size)
+    encrypted = protocol.MagicCipher(local_credentials.magic_token).encode(plaintext)
+    assert encrypted.startswith(b" ")
+    reply = ack + (b" " + sid + b"\n" if long_ack else b"") + encrypted
+
+    async def feed():
+        reader.feed_data(reply[:split])
+        await asyncio.sleep(0)
+        reader.feed_data(reply[split:])
+
+    monkeypatch.setattr(
+        asyncio, "open_connection", AsyncMock(return_value=(reader, writer))
+    )
+    feeder = asyncio.create_task(feed())
+    tunnel = await protocol.MagicP2PTunnel.connect("private-host", local_credentials)
+    received = b""
+    while len(received) < len(plaintext):
+        received += await asyncio.wait_for(tunnel.receive(), 1)
+    assert received == plaintext
+    await feeder
+    await tunnel.close()
+
+
+@pytest.mark.usefixtures("socket_enabled")
+@pytest.mark.parametrize("long_ack", [False, True])
+async def test_camera_waits_for_rtsp_after_ack(monkeypatch, long_ack):
+    """A 30-byte-ID camera can wait for RTSP before sending anything else."""
+    credentials = protocol.Credentials(
+        123456, b"x" * 30, b"synthetic-token", "u", "p", "a"
+    )
+    request = b"OPTIONS rtsp://camera/ RTSP/1.0\r\n\r\n"
+    response = b"RTSP/1.0 200 OK\r\n\r\n"
+    finished = asyncio.get_running_loop().create_future()
+
+    async def camera(reader, writer):
+        try:
+            handshake = await reader.readexactly(139)
+            writer.write(b"ok 0 dconn")
+            await writer.drain()
+            decoder = protocol.MagicCipher(credentials.magic_token)
+            plain = b""
+            while len(plain) < len(request):
+                chunk = await asyncio.wait_for(reader.read(4096), 1)
+                if not chunk:
+                    raise EOFError("Client closed before RTSP")
+                plain += decoder.decode(chunk)
+            assert plain == request
+            # Delay the long suffix until after RTSP, splitting it byte by byte.
+            if long_ack:
+                for value in b" " + handshake.split()[4] + b"\n":
+                    writer.write(bytes([value]))
+                    await writer.drain()
+                    await asyncio.sleep(0)
+            writer.write(protocol.MagicCipher(credentials.magic_token).encode(response))
+            await writer.drain()
+            finished.set_result(None)
+        except Exception as err:
+            finished.set_exception(err)
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    server = await asyncio.start_server(camera, "127.0.0.1", 0)
+    monkeypatch.setattr(protocol, "CAMERA_PORT", server.sockets[0].getsockname()[1])
+    tunnel = None
+    try:
+        tunnel = await asyncio.wait_for(
+            protocol.MagicP2PTunnel.connect("127.0.0.1", credentials), 1
+        )
+        await tunnel.send(request)
+        assert await asyncio.wait_for(tunnel.receive(), 1) == response
+        assert await tunnel.receive() == b""
+        await asyncio.wait_for(finished, 1)
+    finally:
+        if tunnel:
+            await tunnel.close()
+        server.close()
+        await server.wait_closed()
+
+
+@pytest.mark.parametrize("suffix", [b"partial", b"bad_delimiter"])
+async def test_invalid_optional_echo(monkeypatch, local_credentials, suffix):
+    """A truncated echo or invalid delimiter fails without exposing its bytes."""
+    sid = protocol.generate_sid(local_credentials)
+    reader = asyncio.StreamReader()
+    writer = Mock(
+        drain=AsyncMock(), wait_closed=AsyncMock(), is_closing=Mock(return_value=False)
+    )
+    reader.feed_data(b"ok 0 dconn " + (sid[:4] if suffix == b"partial" else sid + b"!"))
+    reader.feed_eof()
+    monkeypatch.setattr(
+        asyncio, "open_connection", AsyncMock(return_value=(reader, writer))
+    )
+    tunnel = await protocol.MagicP2PTunnel.connect("private-host", local_credentials)
+    with pytest.raises((EOFError, ConnectionError)) as caught:
+        await tunnel.receive()
+    assert sid.decode() not in str(caught.value)
+    await tunnel.close()
 
 
 @pytest.mark.parametrize(

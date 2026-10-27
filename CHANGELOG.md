@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.6b2 — 2026-10-27
+
+- Accept the ten-byte local `ok 0 dconn` acknowledgement recognized by the
+  Android app, without waiting for an echoed SID before sending RTSP.
+- Preserve extended VM65 acknowledgements by stripping their optional SID echo
+  before cipher decoding, including fragmented and coalesced stream data.
+- Add short/long ACK loopback round trips with 30-byte device identifiers,
+  delayed SID echoes and fragmented cipher prefixes. VM85 operation still
+  requires confirmation on the reporter's camera.
+
 ## 0.5.6b1 — 2026-10-27
 
 - Add debug diagnostics for local TCP connection, handshake send/receive and
