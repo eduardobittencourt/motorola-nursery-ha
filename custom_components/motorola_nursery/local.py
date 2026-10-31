@@ -21,6 +21,7 @@ _LOGGER = logging.getLogger(__name__)
 LOCAL_PORT = 2278
 TIMEOUT = 20
 INITIALIZATION_TIMEOUT = 30
+SHUTDOWN_TIMEOUT = 5
 
 
 @dataclass(repr=False)
@@ -171,7 +172,12 @@ class LocalControlServer:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
         if server:
-            await server.wait_closed()
+            try:
+                async with asyncio.timeout(SHUTDOWN_TIMEOUT):
+                    await server.wait_closed()
+            except TimeoutError:
+                # Closing can stall while flushing buffered data to a peer.
+                server.abort_clients()
 
     def _accept(self, reader, writer) -> None:
         if not self._entries or len(self._tasks) >= len(self._entries) + 8:
@@ -184,13 +190,18 @@ class LocalControlServer:
     def _identify(self, parts: list[str]) -> Registration:
         if len(parts) != 4 or parts[0] != "dev" or len(parts[1]) > 10:
             raise ValueError("Invalid local camera registration")
+        matches = []
         for registration in self._entries.values():
             credentials = registration.credentials()
             if hmac.compare_digest(parts[1], str(credentials.sid_user_id)) and (
                 hmac.compare_digest(parts[2].encode(), credentials.magic_token)
             ):
-                return registration
-        raise ValueError("Unknown local camera")
+                matches.append(registration)
+        if len(matches) != 1:
+            raise ValueError(
+                "Unknown local camera" if not matches else "Ambiguous local camera"
+            )
+        return matches[0]
 
     async def _handle(self, reader, writer) -> None:
         registration = peer = None

@@ -1,8 +1,9 @@
 """Real loopback F3 cameras: identity, readings, events and disconnects."""
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from nacl.public import Box, PrivateKey, PublicKey
@@ -318,3 +319,49 @@ async def test_missing_or_rejected_setup_never_becomes_ready(
             await connection.writer.wait_closed()
     finally:
         await server.unregister("one")
+
+
+async def test_shutdown_aborts_stalled_transports_within_deadline():
+    closed = asyncio.Event()
+    transport_server = Mock(spec=asyncio.Server)
+    transport_server.wait_closed = AsyncMock(side_effect=closed.wait)
+    transport_server.abort_clients.side_effect = closed.set
+    server = LocalControlServer(0)
+    server._server = transport_server
+    with patch("custom_components.motorola_nursery.local.SHUTDOWN_TIMEOUT", 0.01):
+        await asyncio.wait_for(server._stop(), 0.5)
+    transport_server.close.assert_called_once()
+    transport_server.abort_clients.assert_called_once()
+    assert server._server is None
+
+
+@pytest.mark.parametrize("ambiguous", [False, True])
+async def test_multiple_entries_require_unique_registration(socket_enabled, ambiguous):
+    second_credentials = replace(
+        CREDENTIALS,
+        sid_device=b"second-device",
+        magic_token=CREDENTIALS.magic_token if ambiguous else b"second-token",
+    )
+    server = LocalControlServer(0)
+    first = await server.register("one", lambda: CREDENTIALS)
+    second = await server.register("two", lambda: second_credentials)
+    connection = None
+    try:
+        if ambiguous:
+            connection = await camera(server.port)
+            with pytest.raises(EOFError):
+                await asyncio.wait_for(connection.readline(), 1)
+            assert first.peer is None
+            assert not first.ready.is_set()
+        else:
+            connection = await connected(server.port)
+            await asyncio.wait_for(first.ready.wait(), 1)
+            assert first.peer is not None
+        assert second.peer is None
+        assert not second.ready.is_set()
+    finally:
+        if connection:
+            connection.close()
+            await connection.writer.wait_closed()
+        await server.unregister("one")
+        await server.unregister("two")

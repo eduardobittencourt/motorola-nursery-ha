@@ -47,7 +47,7 @@ Motorola account** to enable sensor discovery.
 
 ## Incoming LAN readings (experimental)
 
-After account setup, open **Reconfigure > Local camera readings** and enable the
+After account setup, open **Reconfigure > Use local entity readings** and enable the
 local transport. This requires network configuration: redirect only the camera's
 outgoing TCP port **2278** to the Home Assistant host on TCP **2278**, and allow
 its return traffic. The integration cannot install router rules. Ordinary access
