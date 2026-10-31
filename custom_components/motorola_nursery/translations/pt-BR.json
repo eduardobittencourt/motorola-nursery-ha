@@ -37,13 +37,21 @@
         "title": "Reconfigurar câmera",
         "menu_options": {
           "user": "Conectar ou autenticar a conta Motorola",
-          "change_host": "Alterar o IP da câmera"
+          "change_host": "Alterar o IP da câmera",
+          "local_control": "Usar leituras locais das entidades"
         }
       },
       "change_host": {
         "title": "Alterar o endereço da câmera",
         "data": {
           "host": "IP ou nome de rede da câmera"
+        }
+      },
+      "local_control": {
+        "title": "Leituras locais da câmera",
+        "description": "Encaminhe a conexão TCP de controle da câmera, porta 2278, para o Home Assistant. As leituras e os eventos usam somente a rede local, sem fallback para a nuvem. Comandos de configuração, movimento e reprodução ainda não estão disponíveis nesse modo. Consulte o guia de configuração da rede.",
+        "data": {
+          "local_control": "Usar controle local"
         }
       }
     },

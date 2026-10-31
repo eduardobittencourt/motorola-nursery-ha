@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0 — 2026-10-31
+
+- Add an opt-in incoming LAN transport for camera readings and detection events,
+  using account credentials saved during setup without cloud fallback.
+- Preserve existing entity identifiers and local video; add authenticated F3
+  sessions, disconnect handling and reconnect coverage.
+- Expose local mode in reconfiguration and document required TCP 2278 routing.
+  Setting writes, PTZ and lullaby controls are unavailable in this mode.
+
 ## 0.5.6 — 2026-10-27
 
 - Complete VM85CONNECT local setup and video compatibility: accept the ten-byte

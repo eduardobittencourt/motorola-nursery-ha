@@ -10,7 +10,7 @@ the [project README](../README.md).
 
 - [Protocol reference](protocol.md): local video transport, cloud account access,
   camera telemetry and events, verified field mappings and controls, and the
-  limits of local telemetry research.
+  incoming LAN telemetry transport and its validation limits.
 - [Development and maintenance](development.md): module responsibilities,
   automated tests, HACS distribution, releases and live validation.
 - [Brand assets](brand-assets.md): icon provenance and trademark attribution.

@@ -13,5 +13,8 @@
   "integration_type": "device",
   "iot_class": "cloud_push",
   "issue_tracker": "https://github.com/eduardobittencourt/motorola-nursery-ha/issues",
-  "version": "0.5.6"
+  "requirements": [
+    "PyNaCl==1.6.2"
+  ],
+  "version": "0.6.0"
 }

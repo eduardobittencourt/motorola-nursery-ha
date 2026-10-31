@@ -37,13 +37,21 @@
         "title": "Reconfigure camera",
         "menu_options": {
           "user": "Connect or sign in to the Motorola account",
-          "change_host": "Change the camera IP address"
+          "change_host": "Change the camera IP address",
+          "local_control": "Use local entity readings"
         }
       },
       "change_host": {
         "title": "Change the camera address",
         "data": {
           "host": "Camera IP address or hostname"
+        }
+      },
+      "local_control": {
+        "title": "Local camera readings",
+        "description": "Forward this camera’s outgoing TCP control connection on port 2278 to Home Assistant. Readings and events use the LAN without cloud fallback. Setting, movement and playback commands are not yet available in this mode. See the network setup guide.",
+        "data": {
+          "local_control": "Use local control"
         }
       }
     },

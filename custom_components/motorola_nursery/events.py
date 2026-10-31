@@ -178,14 +178,18 @@ class MotorolaEventManager:
     """Publish detections to entities and the Home Assistant event bus."""
 
     def __init__(
-        self, hass: HomeAssistant, entry: ConfigEntry, context: ssl.SSLContext
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        context: ssl.SSLContext | None,
+        client_factory=None,
     ) -> None:
         self.hass = hass
         self.entry = entry
         self.connected = False
         self.latest: dict[str, datetime] = {}
         self._listeners: set[Callable[[CameraEvent | None], None]] = set()
-        self._client = CameraEventListener(
+        self._client = (client_factory or CameraEventListener)(
             entry, context, self._on_event, self._on_connection
         )
 

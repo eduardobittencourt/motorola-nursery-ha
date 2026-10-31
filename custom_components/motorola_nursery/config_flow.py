@@ -36,7 +36,14 @@ from .cloud import (
     Session,
     atom,
 )
-from .const import CONF_CODE, CONF_DEVICE, CONF_EMAIL, CONF_SESSION, DOMAIN
+from .const import (
+    CONF_CODE,
+    CONF_DEVICE,
+    CONF_EMAIL,
+    CONF_LOCAL_CONTROL,
+    CONF_SESSION,
+    DOMAIN,
+)
 from .protocol import MagicP2PTunnel
 
 NETWORK_ERRORS = (OSError, TimeoutError, EOFError)
@@ -321,7 +328,27 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_reconfigure(self, user_input=None) -> ConfigFlowResult:
         return self.async_show_menu(
-            step_id="reconfigure", menu_options=["user", "change_host"]
+            step_id="reconfigure", menu_options=["user", "change_host", "local_control"]
+        )
+
+    async def async_step_local_control(self, user_input=None) -> ConfigFlowResult:
+        """Enable the incoming LAN transport only after explicit configuration."""
+        entry = self._get_reconfigure_entry()
+        if user_input is not None:
+            return self.async_update_reload_and_abort(
+                entry,
+                data_updates={CONF_LOCAL_CONTROL: user_input[CONF_LOCAL_CONTROL]},
+            )
+        return self.async_show_form(
+            step_id="local_control",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_LOCAL_CONTROL,
+                        default=entry.data.get(CONF_LOCAL_CONTROL, False),
+                    ): bool
+                }
+            ),
         )
 
     async def async_step_change_host(self, user_input=None) -> ConfigFlowResult:

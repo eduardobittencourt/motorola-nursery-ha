@@ -178,3 +178,16 @@ followed by `reason=server_rejected` distinguishes a vendor refusal from
 `reason=unexpected_response` or `reason=unsupported_routing_host`. It does not
 explain an undocumented vendor status on its own. These logs narrow the next
 investigation; additional evidence may still be necessary.
+
+## Incoming LAN mode has unavailable readings
+
+Check that local mode is enabled, that HA can listen on TCP 2278, and that only
+the camera's outgoing TCP 2278 is redirected to that listener. The camera does
+not expose an equivalent getter service at its own port 2278. Check return
+routing/NAT as well as firewall reachability. Video on TCP 77 is a separate path.
+
+Debug logs report initialization stages and error categories without credentials
+or raw frames. A missing camera connection never triggers account renewal or
+cloud telemetry. Disable local mode to restore the standard transport. After a
+camera reset or relink, repeat account setup manually to refresh saved credentials.
+Writable controls, playlists and PTZ are unavailable in the experimental local mode.

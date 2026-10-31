@@ -3,3 +3,4 @@ ha-ffmpeg==3.2.2
 PyTurboJPEG==2.5.0
 ruff==0.17.1
 bandit==1.9.4
+PyNaCl==1.6.2

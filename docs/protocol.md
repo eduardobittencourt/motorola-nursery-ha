@@ -13,14 +13,14 @@ capture, device identifier or credential is included.
 
 ## Transports
 
-The camera exposes local video separately from the cloud services used by the
-integration:
+The camera exposes local video separately from its outgoing data connection:
 
 | Path | Connection | Purpose |
 | --- | --- | --- |
 | Local video | Camera TCP 77, tunneled to internal RTSP 6667 | Snapshots and HLS playback. |
 | Account access | Certificate-verified TLS on vendor TCP 3388 | Email-code login, session resumption and device listing. |
-| Camera data | Certificate-verified TLS on the account's routed `*.moto.5gencare.com` server, TCP 2288 | Telemetry, settings, controls and detection events. |
+| Incoming LAN data (opt-in) | Camera outgoing TCP 2278 redirected to the HA listener | Local telemetry and detection notifications. |
+| Camera data (default) | Certificate-verified TLS on the account's routed `*.moto.5gencare.com` server, TCP 2288 | Telemetry, settings, controls and detection events. |
 
 ### Local video
 
@@ -212,7 +212,7 @@ reboot, shell access, song upload/removal and talkback are deliberately excluded
 ## Local telemetry investigation
 
 Read-only probes on 2026-10-09 used one VM65CONNECT, hardware V1.2.03,
-firmware V1.6.37. They did not establish a local telemetry or detection-event
+firmware V1.6.37. Those initial probes did not establish a local telemetry or detection-event
 API:
 
 - Authenticated RTSP `GET_PARAMETER` requests for `temperature_reading` and
@@ -225,19 +225,19 @@ API:
 
 These observations apply to the tested requests and firmware; they do not
 exclude other local APIs. Port 9090 is not exposed by the integration's RTSP
-bridge. The integration continues to use the cloud channel for telemetry and
-notifications. No camera settings were written during those probes, and
+bridge. The default transport still uses the cloud channel; the incoming LAN
+transport below provides a separate camera-initiated path. No camera settings were written during those probes, and
 internet access was not blocked, so they do not establish offline telemetry.
 
 ## Failure and privacy boundaries
 
-Telemetry reads have a 15-second overall deadline, a 64 KiB line limit,
+Cloud telemetry reads have a 15-second overall deadline, a 64 KiB line limit,
 validated counts, duplicate-key rejection and bounded unrelated-message handling. An invalid
 individual value is unavailable; malformed/incomplete responses fail the poll.
 Telemetry connection errors never reset the camera, reload the integration or
 invoke account renewal. The next scheduled poll retries with current saved credentials.
 
-TLS verification is mandatory. Exceptions and diagnostics omit raw messages,
+TLS verification is mandatory for account and cloud control connections. Exceptions and diagnostics omit raw messages,
 credentials, account identifiers and camera/network addresses. Diagnostics expose
 only setup/availability flags, the number of recognized capabilities, and local
 connection/process counts.
@@ -247,3 +247,47 @@ frames are implemented from the verified vendor protocol; physical detection
 latency, long-term cloud behavior and other firmware versions need broader live
 validation.
 The local video path remains independent of this telemetry channel.
+
+## Incoming LAN transport
+
+`f3.py` implements the camera-initiated FePe V3 connection on TCP 2278;
+`local.py` authenticates registrations and multiplexes property replies,
+keepalives and detection notifications. A shared listener matches the saved
+owner ID and per-camera Magic token. Network redirection is configured outside
+the integration. The listener is not an HTTP endpoint or an RTSP proxy.
+
+The 72-byte greeting contains a 16-byte version header, an ephemeral X25519
+public key and a 24-byte nonce. Its fixed mask is the first 72 bytes of the
+Blowfish P-array, a public format constant. A NaCl Box authenticates the random
+1024-byte rolling table. Subsequent bytes use the directional rolling transform;
+this legacy wire format does not authenticate each command. Restrict access to
+the trusted camera network.
+
+Initialization sends a generated UTC registration clock in BusyBox date format
+and the saved device identifier in both MagicP2P setup fields. Session keys are
+fresh per socket. Account passwords, active account sessions and captured cloud
+bootstrap messages are not needed for polling. The listener never opens a
+vendor connection. Getter responses use the same bounded allowlisted parsers
+as the cloud client. A disconnect invalidates availability and the capability
+cache is refreshed on a new connection; pending commands fail without fallback.
+The F3 handshake has a 10-second deadline, followed by a separate 30-second
+registration/setup deadline. Registration and MagicP2P setup are sent together.
+The listener waits for a successful setup acknowledgement before exposing the
+connection to getters; keepalives and notifications are dispatched while waiting.
+A poll waits up to 20 seconds for a ready camera, then has a separate 40-second
+deadline for capability discovery and value reads.
+
+Live validation on VM65CONNECT V1.6.37 read all 24 supported fields with the
+camera WAN blocked, repeated a read after 60 seconds, and read again after
+closing and re-establishing the camera socket. Initialization used only saved
+setup credentials, without a cloud session or captured bootstrap. Transient
+connection timeouts required retries; this is an experimental transport.
+The installed candidate on Home Assistant 2026.10.4 also passed polling and
+integration reload with the camera WAN blocked, preserving its entity IDs.
+
+Readings and notification dispatch also have synthetic invalid-identity,
+fragmentation, cancellation and reconnect coverage. Full camera boot with WAN
+already blocked, physical detection events and prolonged operation remain
+unverified.
+Only getters and notification acknowledgements are implemented. Writable fields,
+playlist discovery, playback and PTZ commands explicitly fail in local mode.
