@@ -316,3 +316,34 @@ async def test_invalid_device_response_keeps_authenticated_retry_without_new_otp
     second.close.assert_awaited_once()
     assert "stage=device_listing category=device_response" in caplog.text
     assert "private" not in caplog.text
+
+
+async def test_local_control_reconfigure_preserves_account_and_identity(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=DEVICE.sid_device,
+        data={
+            **device_data(DEVICE),
+            "host": "192.0.2.10",
+            "cloud_session": SESSION.as_dict(),
+        },
+    )
+    entry.add_to_hass(hass)
+    before = dict(entry.data)
+    with (
+        patch("homeassistant.config_entries.ConfigEntries.async_reload", AsyncMock()),
+        patch("homeassistant.config_entries.async_process_deps_reqs", AsyncMock()),
+    ):
+        flow = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": "reconfigure", "entry_id": entry.entry_id}
+        )
+        flow = await hass.config_entries.flow.async_configure(
+            flow["flow_id"], {"next_step_id": "local_control"}
+        )
+        assert flow["step_id"] == "local_control"
+        result = await hass.config_entries.flow.async_configure(
+            flow["flow_id"], {"local_control": True}
+        )
+    assert result["reason"] == "reconfigure_successful"
+    assert dict(entry.data) == {**before, "local_control": True}
+    assert entry.unique_id == DEVICE.sid_device

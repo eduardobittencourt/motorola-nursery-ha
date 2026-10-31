@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .auth import credentials_from_data
 from .cloud import vendor_host
-from .const import CONF_SESSION, DOMAIN
+from .const import CONF_LOCAL_CONTROL, CONF_SESSION, DOMAIN
 from .telemetry import TelemetryClient, TelemetryData, TelemetryError
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,7 +37,8 @@ class MotorolaTelemetryCoordinator(DataUpdateCoordinator[TelemetryData]):
         self.entry = entry
 
     def _credentials(self):
-        self.client.host = vendor_host(self.entry.data[CONF_SESSION]["host"])
+        if not self.entry.data.get(CONF_LOCAL_CONTROL, False):
+            self.client.host = vendor_host(self.entry.data[CONF_SESSION]["host"])
         return credentials_from_data(self.entry.data)
 
     def _set_values(self, **updates: int | str) -> None:

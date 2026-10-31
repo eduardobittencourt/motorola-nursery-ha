@@ -13,14 +13,16 @@ from urllib.parse import quote
 from homeassistant.components.ffmpeg import get_ffmpeg_manager
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .auth import async_refresh_credentials, credentials_from_data
 from .bridge import RtspBridge
 from .cloud import AuthenticationError, CloudError
-from .const import CONF_SESSION, PLATFORMS
+from .const import CONF_LOCAL_CONTROL, CONF_SESSION, DOMAIN, PLATFORMS
 from .coordinator import MotorolaTelemetryCoordinator
 from .events import MotorolaEventManager
+from .local import LocalControlServer, LocalEventListener, LocalTelemetryClient
 from .protocol import Credentials, MagicP2PTunnel
 from .telemetry import TelemetryClient
 from .transcoder import FfmpegRelay
@@ -54,10 +56,13 @@ class RuntimeData:
     telemetry: MotorolaTelemetryCoordinator | None = None
     telemetry_task: asyncio.Task[None] | None = None
     events: MotorolaEventManager | None = None
+    local_server: LocalControlServer | None = None
 
     async def async_prepare_stream(self, *, force: bool = False) -> None:
         # Existing imported entries remain fully compatible and local.
-        if CONF_SESSION not in self.entry.data:
+        if CONF_SESSION not in self.entry.data or self.entry.data.get(
+            CONF_LOCAL_CONTROL, False
+        ):
             return
         async with self.lock:
             now = time.monotonic()
@@ -119,6 +124,8 @@ class RuntimeData:
             await self.telemetry.async_shutdown()
         if self.events is not None:
             await self.events.stop()
+        if self.local_server is not None:
+            await self.local_server.unregister(self.entry.entry_id)
         if self.recovery_task is not None:
             self.recovery_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -158,7 +165,46 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await relay.start()
         runtime = RuntimeData(hass, entry, bridge, relay, credentials)
         entry.runtime_data = runtime
-        if CONF_SESSION in entry.data:
+        if entry.data.get(CONF_LOCAL_CONTROL, False):
+            server = hass.data.setdefault(DOMAIN, {}).setdefault(
+                "local_control_server", LocalControlServer()
+            )
+            runtime.local_server = server
+            try:
+                registration = await server.register(
+                    entry.entry_id, lambda: credentials_from_data(entry.data)
+                )
+            except OSError:
+                raise ConfigEntryNotReady(
+                    "Local control listener unavailable"
+                ) from None
+            client = LocalTelemetryClient(registration)
+            runtime.telemetry = MotorolaTelemetryCoordinator(hass, entry, client)
+
+            def local_connection_changed(connected):
+                if runtime.stopping:
+                    return
+                if connected:
+                    entry.async_create_background_task(
+                        hass,
+                        runtime.telemetry.async_request_refresh(),
+                        "Motorola local telemetry connected",
+                    )
+                else:
+                    runtime.telemetry.async_set_update_error(
+                        UpdateFailed("Local camera control unavailable")
+                    )
+
+            registration.connection_callbacks.add(local_connection_changed)
+            runtime.events = MotorolaEventManager(
+                hass,
+                entry,
+                None,
+                lambda _entry, _context, on_event, on_connection: LocalEventListener(
+                    registration, on_event, on_connection
+                ),
+            )
+        elif CONF_SESSION in entry.data:
             context = await hass.async_add_executor_job(ssl.create_default_context)
             client = TelemetryClient(entry.data[CONF_SESSION]["host"], context)
             runtime.telemetry = MotorolaTelemetryCoordinator(hass, entry, client)

@@ -13,7 +13,8 @@ The integration keeps three independent paths:
 | --- | --- | --- |
 | Local video | `protocol.py`, `bridge.py`, `transcoder.py`, `camera.py` | MagicP2P tunnel, loopback RTSP bridge and on-demand FFmpeg relay. |
 | Account access | `cloud.py`, `auth.py`, `config_flow.py` | Email-code login, session storage and credential recovery. |
-| Camera data | `telemetry.py`, `coordinator.py`, `events.py`, entity platforms | Cloud-backed settings, polling and detection notifications. |
+| Camera data | `telemetry.py`, `coordinator.py`, `events.py`, entity platforms | Settings, polling and detection notifications. |
+| Incoming LAN data | `f3.py`, `local.py` | Shared authenticated TCP listener, local getters and notifications; no vendor fallback. |
 
 `__init__.py` owns setup and teardown through the entry's `RuntimeData`. Cloud
 reads run in the background so they do not delay local camera setup. Keep

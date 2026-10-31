@@ -4,13 +4,16 @@
 [![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=eduardobittencourt&repository=motorola-nursery-ha&category=integration)
 
 Community Home Assistant integration for Motorola Nursery cameras that use the
-5GenCare MagicP2P tunnel. It provides local video plus optional cloud-backed
-telemetry, controls, and detection events. Local video is verified on VM65CONNECT
+5GenCare MagicP2P tunnel. It provides local video, telemetry and detection events,
+with an optional incoming LAN transport for camera readings. Cloud transport
+remains available for telemetry and controls. Local video is verified on VM65CONNECT
 and confirmed by a VM85CONNECT owner. See [validation and limits](#validation-and-limits)
 for the features tested on each model.
 
-Video and audio still travel over the LAN; telemetry requires internet access
-and an account-linked entry. A telemetry outage does not interrupt local video.
+Video and audio travel over the LAN. Account access obtains credentials during
+setup. The default telemetry transport uses the cloud; the incoming LAN mode
+uses saved credentials without cloud connections or automatic renewal. A
+telemetry outage does not interrupt local video.
 
 ## Sensors and camera information
 
@@ -30,16 +33,42 @@ motion was detected. The configured bitrate is not a measurement of current
 network throughput.
 
 The sensors share one poll every 60 seconds, use the camera credentials already
-stored in the entry and do not rotate the account session. The client validates
-TLS certificates and sends only allowlisted protocol commands. It does not read
+stored in the entry and do not rotate the account session. The cloud client
+validates TLS certificates; both transports send only allowlisted protocol
+commands. Neither reads
 Wi-Fi names, MAC addresses or sharing information.
 
 Only advertised, supported capabilities become entities. Invalid individual
 values become unavailable. Initial telemetry and playlist requests run in the
-background so slow cloud responses do not delay local camera startup. If the
-cloud is unavailable, sensors appear when telemetry recovers. Existing manual-only
+background so slow telemetry responses do not delay local camera startup.
+Sensors appear when the selected telemetry transport becomes available. Existing manual-only
 entries retain local playback; use **Reconfigure > Connect or sign in to the
 Motorola account** to enable sensor discovery.
+
+## Incoming LAN readings (experimental)
+
+After account setup, open **Reconfigure > Use local entity readings** and enable the
+local transport. This requires network configuration: redirect only the camera's
+outgoing TCP port **2278** to the Home Assistant host on TCP **2278**, and allow
+its return traffic. The integration cannot install router rules. Ordinary access
+to the camera's IP address is insufficient because the camera initiates this
+connection. Both directions must pass through the redirecting gateway; a
+separate HA return route may require source NAT for this connection. Keep the
+listener private to your camera network.
+
+This mode polls the same supported values every 60 seconds and receives detection
+notifications over the authenticated camera connection. Existing entity IDs are
+preserved. It reconnects using the credentials saved during account setup and
+has no cloud fallback. Camera reset or account relinking can change those
+credentials and require manual account setup again.
+
+This first implementation provides readings and detection events. Setting writes,
+PTZ and lullaby commands are unavailable in this mode; those commands have not
+been validated over the incoming transport. The standard cloud mode retains its
+existing controls. Local video continues using the camera's TCP port 77.
+
+See [the protocol guide](docs/protocol.md#incoming-lan-transport) for connection
+initialization and verification limits.
 
 ## Controls
 
@@ -80,8 +109,8 @@ filename, URL, account token or camera token. Home Assistant automations can use
 the binary sensors, native event entities or the bus event to send a mobile
 notification. The integration itself does not choose a notification recipient.
 
-Detections use one persistent certificate-verified connection and normally
-arrive without waiting for the 60-second telemetry poll. The listener answers
+In the default cloud mode, detections use one persistent certificate-verified
+connection and normally arrive without waiting for the 60-second telemetry poll. The listener answers
 camera keepalives, reconnects with bounded backoff and deduplicates replayed
 notifications. Detection entities become unavailable while this cloud channel
 is disconnected; local video remains independent.
@@ -127,18 +156,24 @@ service on port 6667. Two private loopback listeners feed an on-demand FFmpeg
 relay and Home Assistant's native Stream integration. H.264 video is copied;
 PCMA audio is converted to AAC. No third-party WebRTC integration is required.
 
-Startup uses saved camera credentials. If a local connection fails, an
-account-connected entry attempts cloud credential renewal, with a cooldown
+Startup uses saved camera credentials. In the default transport, if a local
+video connection fails, an account-connected entry attempts cloud credential
+renewal, with a cooldown
 between attempts. Each successful session resumption rotates the cloud token;
 the replacement is saved in the config entry before fetching devices.
 A rejected session starts Home Assistant reauthentication. Sending another
-email code always requires submitting the email form.
+email code always requires submitting the email form. Incoming LAN mode disables
+automatic account renewal; credentials can be refreshed manually by account setup.
 
 ## Validation and limits
 
 - Compatibility has been tested with one VM65CONNECT, hardware V1.2.03 and
   firmware V1.6.37. Local snapshot/HLS with H.264 video and AAC mono audio,
   email-code login, telemetry and controls have been verified on this model.
+- The experimental incoming LAN transport read all 24 supported values on
+  VM65CONNECT V1.6.37 with WAN blocked, including a 60-second polling interval
+  and socket reconnection. Reconnection required retries; cold boot, physical
+  detection notifications and prolonged operation still need validation.
 - A VM85CONNECT owner confirmed account setup, local connection and live video
   on firmware V1.6.45 with Home Assistant 2026.10.4, using the 0.5.6b2 candidate
   promoted to this stable release. Temperature and motion appeared correct in

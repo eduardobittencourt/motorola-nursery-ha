@@ -128,3 +128,95 @@ async def test_slow_cloud_does_not_block_video_and_is_cancelled_on_unload(
         assert cancelled.is_set() == (finish == "unload")
         bridge.stop.assert_awaited_once()
         relay.stop.assert_awaited_once()
+
+
+async def test_local_entry_uses_no_cloud_and_keeps_entity_ids(hass, socket_enabled):
+    from custom_components.motorola_nursery.local import LocalControlServer
+    from tests.test_local import CAPS, connected
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="synthetic-device",
+        data={
+            "host": "192.0.2.10",
+            "sid_user_id": "123456",
+            "sid_device": "synthetic-device",
+            "magic_token": "synthetic-token",
+            "rtsp_username": "user",
+            "rtsp_password": "password",
+            "access_token": "access",
+            "local_control": True,
+        },
+    )
+    entry.add_to_hass(hass)
+    server = LocalControlServer(0)
+    bridge = Mock(start=AsyncMock(), stop=AsyncMock(), port=12345, active_connections=0)
+    relay = Mock(
+        start=AsyncMock(),
+        stop=AsyncMock(),
+        url="http://127.0.0.1/test",
+        active_processes=0,
+    )
+    connection = task = None
+    with (
+        patch(
+            "homeassistant.components.ffmpeg.async_setup", AsyncMock(return_value=True)
+        ),
+        patch(
+            "homeassistant.components.stream.async_setup", AsyncMock(return_value=True)
+        ),
+        patch("custom_components.motorola_nursery.RtspBridge", return_value=bridge),
+        patch("custom_components.motorola_nursery.FfmpegRelay", return_value=relay),
+        patch(
+            "custom_components.motorola_nursery.LocalControlServer", return_value=server
+        ),
+        patch("custom_components.motorola_nursery.TelemetryClient") as cloud_client,
+        patch("custom_components.motorola_nursery.async_refresh_credentials") as renew,
+        patch(
+            "custom_components.motorola_nursery.get_ffmpeg_manager",
+            return_value=Mock(binary="ffmpeg"),
+        ),
+    ):
+        try:
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            connection = await connected(server.port)
+
+            async def respond():
+                while True:
+                    line = await connection.readline()
+                    if line == b"caplist\n":
+                        await connection.send(CAPS)
+                    elif line.startswith(b"get "):
+                        await connection.send(
+                            b"get 2 temperature_reading 239 wifi_signal 71\n"
+                        )
+                    elif line == b"ping\n":
+                        await connection.send(b"pong 0\n")
+
+            task = asyncio.create_task(respond())
+            await entry.runtime_data.telemetry_task
+            await hass.async_block_till_done()
+            registry = er.async_get(hass)
+            sensor_id = registry.async_get_entity_id(
+                "sensor", DOMAIN, "synthetic-device:temperature_reading"
+            )
+            assert hass.states.get(sensor_id).state == "23.9"
+            assert entry.runtime_data.events.connected
+            await entry.runtime_data.async_prepare_stream(force=True)
+            cloud_client.assert_not_called()
+            renew.assert_not_called()
+            assert await hass.config_entries.async_unload(entry.entry_id)
+            await hass.async_block_till_done()
+            assert not server._tasks
+        finally:
+            if task:
+                task.cancel()
+                from contextlib import suppress
+
+                with suppress(asyncio.CancelledError, EOFError):
+                    await task
+            if connection:
+                connection.close()
+                await connection.writer.wait_closed()
+            if server._entries:
+                await server.unregister(entry.entry_id)

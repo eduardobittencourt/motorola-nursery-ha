@@ -5,7 +5,7 @@ from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 
-from .const import CONF_SESSION, DOMAIN
+from .const import CONF_LOCAL_CONTROL, CONF_SESSION, DOMAIN
 
 
 async def async_get_config_entry_diagnostics(
@@ -21,6 +21,7 @@ async def async_get_config_entry_diagnostics(
         "home_assistant_version": HA_VERSION,
         "entry_version": entry.version,
         "account_login_configured": CONF_SESSION in entry.data,
+        "local_control_enabled": bool(entry.data.get(CONF_LOCAL_CONTROL, False)),
         "entry_state": entry.state.value,
         "telemetry_configured": coordinator is not None,
         "telemetry_available": bool(coordinator and coordinator.last_update_success),

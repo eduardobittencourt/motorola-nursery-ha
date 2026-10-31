@@ -167,6 +167,7 @@ async def test_diagnostics_excludes_all_account_and_device_data(hass):
         "home_assistant_version",
         "entry_version",
         "account_login_configured",
+        "local_control_enabled",
         "entry_state",
         "telemetry_configured",
         "telemetry_available",
