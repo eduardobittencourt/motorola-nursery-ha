@@ -1,4 +1,4 @@
-"""Measurements and read-only setting values advertised by the camera."""
+"""Camera measurements, separate from configuration controls."""
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -27,45 +27,6 @@ SENSORS = (
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    SensorEntityDescription(
-        key="videoKbps",
-        translation_key="video_bitrate",
-        icon="mdi:speedometer",
-        native_unit_of_measurement="kbit/s",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    SensorEntityDescription(
-        key="night_vision",
-        translation_key="night_vision",
-        icon="mdi:weather-night",
-        device_class=SensorDeviceClass.ENUM,
-        options=["off", "on", "auto"],
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    *(
-        SensorEntityDescription(
-            key=key,
-            translation_key=key,
-            icon=icon,
-            entity_category=EntityCategory.DIAGNOSTIC,
-        )
-        for key, icon in (
-            ("video_brightness", "mdi:brightness-6"),
-            ("speaker_volume", "mdi:volume-high"),
-            ("motion", "mdi:motion-sensor"),
-            ("sound", "mdi:microphone"),
-        )
-    ),
-    *(
-        SensorEntityDescription(
-            key=key,
-            translation_key=key,
-            device_class=SensorDeviceClass.TEMPERATURE,
-            native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-            entity_category=EntityCategory.DIAGNOSTIC,
-        )
-        for key in ("temperature_low", "temperature_high")
     ),
 )
 
@@ -107,8 +68,6 @@ class MotorolaSensor(MotorolaTelemetryEntity, SensorEntity):
         value = self.value
         if self._key == "temperature_reading":
             return value / 10 if isinstance(value, int) else None
-        if self._key == "night_vision":
-            return {0: "off", 1: "on", 2: "auto"}.get(value)
         return value
 
     @property

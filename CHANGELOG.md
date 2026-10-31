@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0b0 — Unreleased candidate
+
+- Remove 16 sensor/binary-sensor mirrors of camera settings. Number, select and
+  switch entities continue to expose current configuration values.
+- Keep temperature, Wi-Fi quality and real motion/sound detections. Retire only
+  the current entry's obsolete registry identities; preserve control IDs and
+  recorder history. References to removed mirrors must use their controls.
+
 ## 0.6.0 — 2026-10-31
 
 - Add an opt-in incoming LAN transport for camera readings and detection events,

@@ -21,6 +21,7 @@ from .bridge import RtspBridge
 from .cloud import AuthenticationError, CloudError
 from .const import CONF_LOCAL_CONTROL, CONF_SESSION, DOMAIN, PLATFORMS
 from .coordinator import MotorolaTelemetryCoordinator
+from .entity import async_remove_setting_mirrors
 from .events import MotorolaEventManager
 from .local import LocalControlServer, LocalEventListener, LocalTelemetryClient
 from .protocol import Credentials, MagicP2PTunnel
@@ -209,6 +210,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             client = TelemetryClient(entry.data[CONF_SESSION]["host"], context)
             runtime.telemetry = MotorolaTelemetryCoordinator(hass, entry, client)
             runtime.events = MotorolaEventManager(hass, entry, context)
+        async_remove_setting_mirrors(hass, entry)
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
         # Register the camera and delayed-discovery listeners before any cloud
         # request. Background refresh cannot hold up HA or local video startup.

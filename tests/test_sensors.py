@@ -97,11 +97,10 @@ async def test_sensor_discovery_outage_recovery_and_unload(hass):
         temperature_id = entity_id("sensor", "temperature_reading")
         assert hass.states.get(temperature_id).state == "24.1"
         assert hass.states.get(temperature_id).attributes["unit_of_measurement"] == "°C"
-        assert hass.states.get(entity_id("sensor", "night_vision")).state == "auto"
-        assert (
-            hass.states.get(entity_id("binary_sensor", "lowtemp_switch")).state == "on"
-        )
-        assert len(hass.states.async_entity_ids("sensor")) == 3
+        assert entity_id("sensor", "night_vision") is None
+        assert hass.states.get(entity_id("select", "night_vision")).state == "auto"
+        assert hass.states.get(entity_id("switch", "lowtemp_switch")).state == "on"
+        assert len(hass.states.async_entity_ids("sensor")) == 2
         device_id = registry.async_get(camera_id).device_id
         assert registry.async_get(temperature_id).device_id == device_id
         assert dr.async_get(hass).async_get(device_id).sw_version == "V1.6.37"
@@ -118,7 +117,7 @@ async def test_sensor_discovery_outage_recovery_and_unload(hass):
         await coordinator.async_refresh()
         await hass.async_block_till_done()
         assert hass.states.get(temperature_id).state == "24.1"
-        assert len(hass.states.async_entity_ids("sensor")) == 3
+        assert len(hass.states.async_entity_ids("sensor")) == 2
 
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
@@ -126,3 +125,72 @@ async def test_sensor_discovery_outage_recovery_and_unload(hass):
         assert coordinator._unsub_refresh is None
         relay.stop.assert_awaited_once()
         bridge.stop.assert_awaited_once()
+
+
+async def test_removes_only_owned_setting_mirrors_and_preserves_controls(hass):
+    from custom_components.motorola_nursery.entity import (
+        SETTING_MIRRORS,
+        async_remove_setting_mirrors,
+    )
+
+    entry = MockConfigEntry(domain=DOMAIN, unique_id="migrated-camera")
+    other = MockConfigEntry(domain=DOMAIN, unique_id="other-camera")
+    entry.add_to_hass(hass)
+    other.add_to_hass(hass)
+    registry = er.async_get(hass)
+    removed, kept = [], []
+    for index, ((domain, key), (control_domain, control_key)) in enumerate(
+        SETTING_MIRRORS.items()
+    ):
+        legacy = registry.async_get_or_create(
+            domain,
+            DOMAIN,
+            f"{entry.unique_id}:{key}",
+            config_entry=entry,
+            suggested_object_id=f"legacy_{index}",
+        )
+        removed.append(legacy.entity_id)
+        hass.states.async_set(legacy.entity_id, "unavailable", {"restored": True})
+        kept.append(
+            registry.async_get_or_create(
+                control_domain,
+                DOMAIN,
+                f"{entry.unique_id}:{control_key}",
+                config_entry=entry,
+                suggested_object_id=f"custom_control_{index}",
+            )
+        )
+        kept.append(
+            registry.async_get_or_create(
+                domain,
+                DOMAIN,
+                f"{other.unique_id}:{key}",
+                config_entry=other,
+                suggested_object_id=f"other_legacy_{index}",
+            )
+        )
+    for domain, key in (
+        ("sensor", "temperature_reading"),
+        ("sensor", "wifi_signal"),
+        ("binary_sensor", "motion_detected"),
+        ("binary_sensor", "sound_detected"),
+        ("sensor", "unrelated_value"),
+    ):
+        kept.append(
+            registry.async_get_or_create(
+                domain,
+                DOMAIN,
+                f"{entry.unique_id}:{key}",
+                config_entry=entry,
+                suggested_object_id=f"keep_{key}",
+            )
+        )
+
+    assert len(removed) == 16
+    async_remove_setting_mirrors(hass, entry)
+    await hass.async_block_till_done()
+    assert all(registry.async_get(entity_id) is None for entity_id in removed)
+    assert all(hass.states.get(entity_id) is None for entity_id in removed)
+    assert all(registry.async_get(item.entity_id) == item for item in kept)
+    async_remove_setting_mirrors(hass, entry)
+    assert all(registry.async_get(item.entity_id) == item for item in kept)
