@@ -174,8 +174,10 @@ automatic account renewal; credentials can be refreshed manually by account setu
   email-code login, telemetry and controls have been verified on this model.
 - The experimental incoming LAN transport read all 24 supported values on
   VM65CONNECT V1.6.37 with WAN blocked, including a 60-second polling interval
-  and socket reconnection. Reconnection required retries; cold boot, physical
-  detection notifications and prolonged operation still need validation.
+  and socket reconnection. Motion and sound notifications were also received
+  after physical stimuli in LAN mode. Motion arrived during a camera WAN block;
+  the offline sound trial was inconclusive. Reconnection can require retries;
+  cold boot and prolonged operation still need validation.
 - A VM85CONNECT owner confirmed account setup, local connection and live video
   on firmware V1.6.45 with Home Assistant 2026.10.4, using the 0.5.6b2 candidate
   promoted to this stable release. Temperature and motion appeared correct in

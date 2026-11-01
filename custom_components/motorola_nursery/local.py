@@ -100,11 +100,16 @@ class LocalPeer:
             return
         elif parts[0] == "notify":
             credentials = self.registration.credentials()
+            # Camera-originated notifications may append an opaque upload hint.
+            # The app-facing channel uses four fields. Never expose this hint.
+            notification = parts
+            if len(parts) == 5 and 1 <= len(parts[4]) <= 1024:
+                notification = parts[:4]
             event_type = parse_notification(
-                parts, credentials.magic_token.decode("ascii")
+                notification, credentials.magic_token.decode("ascii")
             )
-            if len(parts) == 4 and hmac.compare_digest(
-                parts[1].encode(), credentials.magic_token
+            if len(notification) == 4 and hmac.compare_digest(
+                notification[1].encode(), credentials.magic_token
             ):
                 await self.send(b"notify 1 1\n")
             if event_type is not None:

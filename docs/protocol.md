@@ -277,6 +277,14 @@ connection to getters; keepalives and notifications are dispatched while waiting
 A poll waits up to 20 seconds for a ready camera, then has a separate 40-second
 deadline for capability discovery and value reads.
 
+Camera-originated detection notifications can contain an additional fifth
+opaque metadata field, observed on VM65CONNECT V1.6.37 for `sounddetect2`.
+The local listener accepts a bounded 1–1024-character hint, validates the saved
+camera token, acknowledges the frame and normalizes it to the four-field
+app-facing notification parser. Event identity uses the type and opaque event
+name; the hint is neither exposed nor retained. Invalid identities, overlong
+hints and extra fields are rejected. Cloud event framing is unchanged.
+
 Live validation on VM65CONNECT V1.6.37 read all 24 supported fields with the
 camera WAN blocked, repeated a read after 60 seconds, and read again after
 closing and re-establishing the camera socket. Initialization used only saved
@@ -286,8 +294,12 @@ The installed candidate on Home Assistant 2026.10.4 also passed polling and
 integration reload with the camera WAN blocked, preserving its entity IDs.
 
 Readings and notification dispatch also have synthetic invalid-identity,
-fragmentation, cancellation and reconnect coverage. Full camera boot with WAN
-already blocked, physical detection events and prolonged operation remain
-unverified.
+fragmentation, cancellation and reconnect coverage. Physical motion and sound
+stimuli produced HA detections in both cloud and corrected LAN modes on
+VM65CONNECT V1.6.37. Motion arrived during a WAN block with the local connection
+and getters still healthy. Sound arrived shortly after that block expired, so
+that trial does not establish offline sound detection or explain the camera's
+alert cadence. Full camera boot with WAN already blocked and prolonged operation
+remain unverified.
 Only getters and notification acknowledgements are implemented. Writable fields,
 playlist discovery, playback and PTZ commands explicitly fail in local mode.

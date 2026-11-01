@@ -2,6 +2,10 @@
 
 ## 0.7.0b0 — Unreleased candidate
 
+- Accept the optional fifth metadata field on incoming camera detection
+  notifications. Acknowledge these frames and dispatch the motion/sound event
+  without exposing the opaque hint. Keep app-facing cloud framing unchanged.
+
 - Remove 16 sensor/binary-sensor mirrors of camera settings. Number, select and
   switch entities continue to expose current configuration values.
 - Keep temperature, Wi-Fi quality and real motion/sound detections. Retire only
