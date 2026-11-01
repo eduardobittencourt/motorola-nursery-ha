@@ -17,20 +17,25 @@ telemetry outage does not interrupt local video.
 
 ## Sensors and camera information
 
-On the verified VM65CONNECT, the integration discovers 18 additional entities:
-
-- Temperature in °C and Wi-Fi signal quality in percent.
-- Configured video bitrate, image brightness and night-vision mode.
-- Speaker volume and motion/sound sensitivity settings.
-- Low/high temperature thresholds and whether each temperature alert is enabled.
-- Image inversion, motion-zone mode and the four zone enable states.
-
+The sensor entities expose temperature in °C and Wi-Fi signal quality in percent.
 Hardware and firmware versions appear in the existing device information.
-The sensor entities above remain read-only mirrors; separate control entities
-provide writable settings. Motion and sound sensitivity are
-configuration values, not detection events. Zone enable states do not mean
-motion was detected. The configured bitrate is not a measurement of current
-network throughput.
+Configuration values are shown directly by their number, select and switch
+entities; separate sensors no longer duplicate them. Motion and sound detection
+binary sensors and event entities remain separate from sensitivity controls.
+
+### Upgrading from duplicated setting sensors
+
+The integration removes its 16 obsolete setting-mirror sensor/binary-sensor
+registry entries automatically (bitrate only after telemetry confirms its
+replacement control has a supported value). Existing control, measurement and
+detection entity IDs remain unchanged; recorder/history data is not deleted.
+Update references to the old mirrors before upgrading: use the corresponding
+number, select or switch entity. In particular, configured bitrate is now shown
+by the video-quality select (for example `640_kbit_s`) instead of the numeric
+bitrate sensor. Cameras without a usable bitrate control keep their read-only
+`videoKbps` sensor. The sensor returns if the replacement becomes unusable.
+The local transport still reports control states even though setting writes
+are not yet supported in that mode.
 
 The sensors share one poll every 60 seconds, use the camera credentials already
 stored in the entry and do not rotate the account session. The cloud client
@@ -172,8 +177,10 @@ automatic account renewal; credentials can be refreshed manually by account setu
   email-code login, telemetry and controls have been verified on this model.
 - The experimental incoming LAN transport read all 24 supported values on
   VM65CONNECT V1.6.37 with WAN blocked, including a 60-second polling interval
-  and socket reconnection. Reconnection required retries; cold boot, physical
-  detection notifications and prolonged operation still need validation.
+  and socket reconnection. Motion and sound notifications were also received
+  after physical stimuli in LAN mode. Motion arrived during a camera WAN block;
+  the offline sound trial was inconclusive. Reconnection can require retries;
+  cold boot and prolonged operation still need validation.
 - A VM85CONNECT owner confirmed account setup, local connection and live video
   on firmware V1.6.45 with Home Assistant 2026.10.4, using the 0.5.6b2 candidate
   promoted to this stable release. Temperature and motion appeared correct in

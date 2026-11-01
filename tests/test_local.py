@@ -16,6 +16,7 @@ from custom_components.motorola_nursery.f3 import (
 from custom_components.motorola_nursery.local import (
     LocalControlServer,
     LocalEventListener,
+    LocalPeer,
     LocalTelemetryClient,
     Registration,
 )
@@ -365,3 +366,64 @@ async def test_multiple_entries_require_unique_registration(socket_enabled, ambi
             await connection.writer.wait_closed()
         await server.unregister("one")
         await server.unregister("two")
+
+
+@pytest.mark.parametrize("hint", [b"", b" private-upload-hint"])
+@pytest.mark.parametrize(
+    "kind,event_type",
+    [
+        (b"motiondetect", "motion"),
+        (b"sounddetect", "sound"),
+        (b"sounddetect2", "sound"),
+    ],
+)
+async def test_local_notifications_accept_optional_upload_hint(
+    hint, kind, event_type, caplog
+):
+    registration = Registration(lambda: CREDENTIALS)
+    events = []
+    registration.event_callbacks.add(events.append)
+    connection = Mock(send=AsyncMock())
+    peer = LocalPeer(connection, registration)
+    wire = b"notify synthetic-token " + kind + b" private-event-name" + hint + b"\n"
+    await peer.handle_line(wire)
+    await peer.handle_line(wire)
+    assert [event.event_type for event in events] == [event_type]
+    assert connection.send.await_count == 2
+    assert all(
+        call.args == (b"notify 1 1\n",) for call in connection.send.await_args_list
+    )
+    assert "private-upload-hint" not in caplog.text
+    assert "private-event-name" not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        b"notify wrong-token sounddetect2 private-event private-hint\n",
+        b"notify synthetic-token sounddetect2 private-event too many fields\n",
+        b"notify synthetic-token sounddetect2 private-event " + b"x" * 1025 + b"\n",
+    ],
+)
+async def test_invalid_local_notification_hint_or_identity_is_rejected(line):
+    registration = Registration(lambda: CREDENTIALS)
+    events = []
+    registration.event_callbacks.add(events.append)
+    connection = Mock(send=AsyncMock())
+    peer = LocalPeer(connection, registration)
+    await peer.handle_line(line)
+    assert not events
+    connection.send.assert_not_awaited()
+
+
+async def test_unknown_notification_type_is_acked_without_using_hint_as_event():
+    registration = Registration(lambda: CREDENTIALS)
+    events = []
+    registration.event_callbacks.add(events.append)
+    connection = Mock(send=AsyncMock())
+    peer = LocalPeer(connection, registration)
+    await peer.handle_line(
+        b"notify synthetic-token sdstatus opaque-name motiondetect\n"
+    )
+    assert not events
+    connection.send.assert_awaited_once_with(b"notify 1 1\n")

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0 — 2026-10-31
+
+- Accept the optional fifth metadata field on incoming camera detection
+  notifications. Acknowledge these frames and dispatch the motion/sound event
+  without exposing the opaque hint. Keep app-facing cloud framing unchanged.
+- Remove 16 sensor/binary-sensor mirrors of camera settings. Number, select and
+  switch entities continue to expose current configuration values.
+- Retain the read-only bitrate sensor when no bitrate control is advertised.
+- Keep temperature, Wi-Fi quality and real motion/sound detections. Retire only
+  the current entry's obsolete registry identities; preserve control IDs and
+  recorder history. References to removed mirrors must use their controls.
+
 ## 0.6.0 — 2026-10-31
 
 - Add an opt-in incoming LAN transport for camera readings and detection events,

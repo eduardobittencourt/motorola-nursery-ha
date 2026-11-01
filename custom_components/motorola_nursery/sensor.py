@@ -1,4 +1,4 @@
-"""Measurements and read-only setting values advertised by the camera."""
+"""Camera measurements, separate from configuration controls."""
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -9,7 +9,8 @@ from homeassistant.components.sensor import (
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature
 from homeassistant.core import callback
 
-from .entity import MotorolaTelemetryEntity
+from .entity import MotorolaTelemetryEntity, async_remove_setting_mirrors
+from .select import OPTION_VALUES
 
 SENSORS = (
     SensorEntityDescription(
@@ -35,38 +36,6 @@ SENSORS = (
         native_unit_of_measurement="kbit/s",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-    SensorEntityDescription(
-        key="night_vision",
-        translation_key="night_vision",
-        icon="mdi:weather-night",
-        device_class=SensorDeviceClass.ENUM,
-        options=["off", "on", "auto"],
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    *(
-        SensorEntityDescription(
-            key=key,
-            translation_key=key,
-            icon=icon,
-            entity_category=EntityCategory.DIAGNOSTIC,
-        )
-        for key, icon in (
-            ("video_brightness", "mdi:brightness-6"),
-            ("speaker_volume", "mdi:volume-high"),
-            ("motion", "mdi:motion-sensor"),
-            ("sound", "mdi:microphone"),
-        )
-    ),
-    *(
-        SensorEntityDescription(
-            key=key,
-            translation_key=key,
-            device_class=SensorDeviceClass.TEMPERATURE,
-            native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-            entity_category=EntityCategory.DIAGNOSTIC,
-        )
-        for key in ("temperature_low", "temperature_high")
-    ),
 )
 
 
@@ -81,10 +50,21 @@ async def async_setup_entry(hass, entry, async_add_entities):
     def discover():
         if not coordinator.last_update_success or coordinator.data is None:
             return
+        capabilities = coordinator.data.capabilities
+        bitrate_control_ready = (
+            "video_bitrate" in capabilities
+            and coordinator.data.values.get("video_bitrate")
+            in OPTION_VALUES["video_bitrate"].values()
+        )
+        if bitrate_control_ready:
+            async_remove_setting_mirrors(hass, entry, remove_bitrate=True)
+            added.discard("videoKbps")
         descriptions = [
             item
             for item in SENSORS
-            if item.key in coordinator.data.capabilities and item.key not in added
+            if item.key in capabilities
+            and item.key not in added
+            and (item.key != "videoKbps" or not bitrate_control_ready)
         ]
         added.update(item.key for item in descriptions)
         async_add_entities(
@@ -107,8 +87,6 @@ class MotorolaSensor(MotorolaTelemetryEntity, SensorEntity):
         value = self.value
         if self._key == "temperature_reading":
             return value / 10 if isinstance(value, int) else None
-        if self._key == "night_vision":
-            return {0: "off", 1: "on", 2: "auto"}.get(value)
         return value
 
     @property
