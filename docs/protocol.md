@@ -326,3 +326,8 @@ events and ten-second binary-sensor pulses. Anti-flicker efficacy, thermal alert
 firing, sensitivity-response calibration and spatial zone exclusion remain
 unverified. Actual PTZ on models advertising those controls has synthetic
 coverage, without a physical motor test. Playlist discovery does not play audio.
+
+A fully consumed but unusable playlist response leaves the shared LAN peer
+connected, so readings and detection events continue while playlist loading
+retries. Transport, framing and synchronization errors still close the peer
+to prevent a later response from being mistaken for a new request.

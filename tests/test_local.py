@@ -531,3 +531,89 @@ async def test_missing_local_controls_never_fall_back_to_cloud(method, args):
         pytest.raises(TelemetryError, match="Local camera"),
     ):
         await getattr(client, method)(CREDENTIALS, *args)
+
+
+@pytest.mark.parametrize("payload", [b"", b"Song.mp3,Song.mp3", b"../private.mp3"])
+async def test_invalid_complete_playlist_preserves_readings_events_and_retry(
+    socket_enabled, payload
+):
+    """A bad playlist cannot disconnect an otherwise synchronized camera."""
+    server = LocalControlServer(0)
+    registration = await server.register("playlist", lambda: CREDENTIALS)
+    client = LocalTelemetryClient(registration)
+    events = []
+    registration.event_callbacks.add(events.append)
+    connection = await connected(server.port)
+
+    async def respond():
+        assert await connection.readline() == b"caplist\n"
+        await connection.send(
+            b"caplist 2 wifi_signal r int 0 100 existsongs r str 1 1024\n"
+        )
+        assert await connection.readline() == b"get 1 wifi_signal\n"
+        await connection.send(b"get 1 wifi_signal 71\n")
+        assert await connection.readline() == b"set existsongs 1\n"
+        await connection.send(b"set existsongs " + payload + b"\n")
+        await connection.send(b"notify synthetic-token motiondetect playlist-event\n")
+        replies = {await connection.readline(), await connection.readline()}
+        assert replies == {b"notify 1 1\n", b"get 1 wifi_signal\n"}
+        await connection.send(b"get 1 wifi_signal 72\n")
+        assert await connection.readline() == b"set existsongs 1\n"
+        await connection.send(b"set existsongs Song.mp3\n")
+
+    task = asyncio.create_task(respond())
+    try:
+        with patch(
+            "asyncio.open_connection", side_effect=AssertionError("Cloud forbidden")
+        ):
+            assert (await client.async_read(CREDENTIALS)).values == {"wifi_signal": 71}
+            peer = registration.peer
+            with pytest.raises(
+                TelemetryError, match="Invalid camera playlist"
+            ) as error:
+                await client.async_list_songs(CREDENTIALS)
+            assert "private" not in str(error.value)
+            assert registration.peer is peer and not peer.closed
+            assert (await client.async_read(CREDENTIALS)).values == {"wifi_signal": 72}
+            assert await client.async_list_songs(CREDENTIALS) == ("Song.mp3",)
+        await task
+        assert [event.event_type for event in events] == ["motion"]
+        assert registration.ready.is_set() and registration.peer is peer
+    finally:
+        connection.close()
+        await connection.writer.wait_closed()
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await server.unregister("playlist")
+
+
+async def test_incomplete_playlist_response_still_closes_shared_peer(socket_enabled):
+    """An unfinished response must be discarded before another request can start."""
+    server = LocalControlServer(0)
+    registration = await server.register("playlist", lambda: CREDENTIALS)
+    client = LocalTelemetryClient(registration)
+    connection = await connected(server.port)
+
+    async def respond():
+        assert await connection.readline() == b"caplist\n"
+        await connection.send(b"caplist 1 existsongs r str 1 1024\n")
+        assert await connection.readline() == b"set existsongs 1\n"
+        await connection.send(b"set existsongs Song.mp3")
+        with pytest.raises(EOFError):
+            await connection.readline()
+
+    task = asyncio.create_task(respond())
+    try:
+        with (
+            patch("custom_components.motorola_nursery.local.TIMEOUT", 0.1),
+            pytest.raises(TelemetryError, match="Local camera control unavailable"),
+        ):
+            await client.async_list_songs(CREDENTIALS)
+        await task
+        assert client._last_peer.closed
+    finally:
+        connection.close()
+        await connection.writer.wait_closed()
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await server.unregister("playlist")

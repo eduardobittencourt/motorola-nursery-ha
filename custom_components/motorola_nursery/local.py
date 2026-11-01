@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from .events import CameraEvent, parse_notification
 from .f3 import F3Connection
 from .protocol import Credentials
-from .telemetry import TelemetryClient, TelemetryError
+from .telemetry import PlaylistValidationError, TelemetryClient, TelemetryError
 
 _LOGGER = logging.getLogger(__name__)
 LOCAL_PORT = 2278
@@ -331,6 +331,9 @@ class LocalTelemetryClient(TelemetryClient):
                         yield peer, LocalWriter(peer)
                     finally:
                         peer.request_pending = False
+        except PlaylistValidationError:
+            # The reply was fully consumed; telemetry/events can reuse this peer.
+            raise
         except asyncio.CancelledError:
             if peer:
                 peer.close()

@@ -11,6 +11,8 @@
 - Fix the empty LAN playlist: load advertised tracks separately from telemetry,
   retry failed discovery even when readings are unchanged, and expose the player
   only after a valid playlist. Derive playback/stop/volume features from capabilities.
+- Keep LAN readings and events connected after a fully consumed but invalid
+  playlist reply; continue closing the peer after transport/framing failures.
 - Reject read-only writes and false PTZ acknowledgements; stop sending the
   unadvertised audio-timer command. No playback starts during discovery.
 

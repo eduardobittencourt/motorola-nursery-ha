@@ -97,6 +97,10 @@ class TelemetryError(Exception):
     """A safe error without wire data or credentials."""
 
 
+class PlaylistValidationError(TelemetryError):
+    """A complete playlist reply is unusable, but stream framing remains valid."""
+
+
 @dataclass(frozen=True, slots=True)
 class Capability:
     """Advertised type, bounds and access for a known protocol field."""
@@ -373,7 +377,7 @@ class TelemetryClient:
                 or len(set(songs)) != len(songs)
                 or any(not SONG_PATTERN.fullmatch(song) for song in songs)
             ):
-                raise TelemetryError("Invalid camera playlist response")
+                raise PlaylistValidationError("Invalid camera playlist response")
             self._songs = songs
             return songs
 
