@@ -49,7 +49,7 @@
       },
       "local_control": {
         "title": "Local camera readings",
-        "description": "Forward this camera’s outgoing TCP control connection on port 2278 to Home Assistant. Readings and events use the LAN without cloud fallback. Setting, movement and playback commands are not yet available in this mode. See the network setup guide.",
+        "description": "Forward this camera’s outgoing TCP control connection on port 2278 to Home Assistant. Readings, events, settings and the playlist use the LAN without cloud fallback. Controls depend on camera-advertised capabilities. See the network setup guide.",
         "data": {
           "local_control": "Use local control"
         }

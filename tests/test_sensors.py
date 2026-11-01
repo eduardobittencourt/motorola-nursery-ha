@@ -18,8 +18,8 @@ DATA = TelemetryData(
     capabilities={
         "temperature_reading": Capability("int", -200, 500),
         "wifi_signal": Capability("int", 0, 100),
-        "night_vision": Capability("int", 0, 2),
-        "lowtemp_switch": Capability("int", 0, 1),
+        "night_vision": Capability("int", 0, 2, True),
+        "lowtemp_switch": Capability("int", 0, 1, True),
         "firmware_version": Capability("str", 7, 7),
     },
     values={
@@ -39,7 +39,7 @@ async def test_sensor_discovery_outage_recovery_and_unload(hass, bitrate_control
         values={**DATA.values, "videoKbps": 640},
     )
     if bitrate_control:
-        data.capabilities["video_bitrate"] = Capability("int", 0, 3)
+        data.capabilities["video_bitrate"] = Capability("int", 0, 3, True)
         data.values["video_bitrate"] = 2
     sensor_count = 2 if bitrate_control else 3
     entry = MockConfigEntry(
@@ -155,7 +155,7 @@ async def test_sensor_discovery_outage_recovery_and_unload(hass, bitrate_control
         # A fallback must survive bad replacement values and return after removal.
         if not bitrate_control:
             data = TelemetryData(dict(data.capabilities), dict(data.values))
-            data.capabilities["video_bitrate"] = Capability("int", 0, 3)
+            data.capabilities["video_bitrate"] = Capability("int", 0, 3, True)
             for invalid in (None, 99):
                 data.values["video_bitrate"] = invalid
                 client.async_read.return_value = TelemetryData(
@@ -167,7 +167,7 @@ async def test_sensor_discovery_outage_recovery_and_unload(hass, bitrate_control
                 assert hass.states.get(legacy_bitrate.entity_id).state == "640"
 
             for replacement in (None, "absent", 99):
-                data.capabilities["video_bitrate"] = Capability("int", 0, 3)
+                data.capabilities["video_bitrate"] = Capability("int", 0, 3, True)
                 data.values["video_bitrate"] = 2
                 client.async_read.return_value = TelemetryData(
                     dict(data.capabilities), dict(data.values)

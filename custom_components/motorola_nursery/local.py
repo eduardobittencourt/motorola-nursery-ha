@@ -295,7 +295,7 @@ class LocalTelemetryClient(TelemetryClient):
     """The local mode cannot instantiate a cloud control session."""
 
     def __init__(self, registration: Registration):
-        # Only the protocol parsers/cache/command lock are inherited.
+        # Share allowlisted commands and caches; replace only the session transport.
         self.registration = registration
         self._capabilities = None
         self._songs = None
@@ -316,6 +316,7 @@ class LocalTelemetryClient(TelemetryClient):
                 async with peer.command_lock:
                     if peer is not self._last_peer:
                         self._capabilities = None
+                        self._songs = None
                         self._last_peer = peer
                     while not peer.responses.empty():
                         peer.responses.get_nowait()
@@ -332,21 +333,6 @@ class LocalTelemetryClient(TelemetryClient):
             if peer:
                 peer.close()
             raise TelemetryError("Local camera control unavailable") from None
-
-    async def async_set(self, *args, **kwargs):
-        raise TelemetryError("Local setting commands are not validated")
-
-    async def async_list_songs(self, *args, **kwargs):
-        raise TelemetryError("Local playlist commands are not validated")
-
-    async def async_play(self, *args, **kwargs):
-        raise TelemetryError("Local playback commands are not validated")
-
-    async def async_stop(self, *args, **kwargs):
-        raise TelemetryError("Local playback commands are not validated")
-
-    async def async_ptz(self, *args, **kwargs):
-        raise TelemetryError("Local movement commands are not validated")
 
 
 class LocalEventListener:

@@ -9,7 +9,8 @@ from homeassistant.components.number import (
 from homeassistant.const import EntityCategory, UnitOfTemperature
 from homeassistant.core import callback
 
-from .entity import MotorolaTelemetryEntity
+from .capabilities import setting_supported
+from .entity import MotorolaSettingEntity, async_remove_unsupported_controls
 
 NUMBERS = (
     NumberEntityDescription(
@@ -77,16 +78,27 @@ async def async_setup_entry(hass, entry, async_add_entities):
     if coordinator is None:
         return
     added: set[str] = set()
+    discovered = False
 
     @callback
     def discover():
+        nonlocal discovered
         if not coordinator.last_update_success or coordinator.data is None:
             return
         descriptions = [
             item
             for item in NUMBERS
-            if item.key in coordinator.data.capabilities and item.key not in added
+            if setting_supported(coordinator.data, item.key) and item.key not in added
         ]
+        if not discovered:
+            async_remove_unsupported_controls(
+                hass,
+                entry,
+                "number",
+                (item.key for item in NUMBERS),
+                (item.key for item in descriptions),
+            )
+            discovered = True
         added.update(item.key for item in descriptions)
         async_add_entities(
             MotorolaNumber(coordinator, entry, item) for item in descriptions
@@ -96,7 +108,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     discover()
 
 
-class MotorolaNumber(MotorolaTelemetryEntity, NumberEntity):
+class MotorolaNumber(MotorolaSettingEntity, NumberEntity):
     def __init__(self, coordinator, entry, description):
         super().__init__(coordinator, entry, description.key)
         self.entity_description = description
@@ -104,6 +116,16 @@ class MotorolaNumber(MotorolaTelemetryEntity, NumberEntity):
     @property
     def native_value(self):
         return self.value
+
+    @property
+    def native_min_value(self):
+        cap = self.coordinator.data.capabilities.get(self._key)
+        return cap.minimum if cap else self.entity_description.native_min_value
+
+    @property
+    def native_max_value(self):
+        cap = self.coordinator.data.capabilities.get(self._key)
+        return cap.maximum if cap else self.entity_description.native_max_value
 
     async def async_set_native_value(self, value: float) -> None:
         if not value.is_integer():

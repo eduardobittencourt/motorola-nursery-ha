@@ -34,8 +34,9 @@ number, select or switch entity. In particular, configured bitrate is now shown
 by the video-quality select (for example `640_kbit_s`) instead of the numeric
 bitrate sensor. Cameras without a usable bitrate control keep their read-only
 `videoKbps` sensor. The sensor returns if the replacement becomes unusable.
-The local transport still reports control states even though setting writes
-are not yet supported in that mode.
+Both telemetry transports support advertised writable controls. Unsupported
+legacy controls are retired after successful discovery; temporary telemetry
+outages do not remove established controls.
 
 The sensors share one poll every 60 seconds, use the camera credentials already
 stored in the entry and do not rotate the account session. The cloud client
@@ -67,10 +68,11 @@ preserved. It reconnects using the credentials saved during account setup and
 has no cloud fallback. Camera reset or account relinking can change those
 credentials and require manual account setup again.
 
-This first implementation provides readings and detection events. Setting writes,
-PTZ and lullaby commands are unavailable in this mode; those commands have not
-been validated over the incoming transport. The standard cloud mode retains its
-existing controls. Local video continues using the camera's TCP port 77.
+This mode supports readings, detection events and the same allowlisted setting
+and lullaby commands as the cloud transport. Playlist discovery runs separately
+from readings and retries after failures. Local video continues using the
+camera's TCP port 77. LAN playback and volume were exercised on VM65CONNECT;
+physical PTZ on models advertising those axes remains unverified.
 
 See [the protocol guide](docs/protocol.md#incoming-lan-transport) for connection
 initialization and verification limits.
@@ -85,14 +87,19 @@ The verified VM65CONNECT controls include:
   thresholds.
 - Image inversion, low/high temperature alerts, motion-zone mode and each of the
   four zone enable states.
-- Short-step pan/tilt buttons and return to origin. Every directional command
-  sends a stop after 0.4 seconds, including when the operation is cancelled.
+- Pan/tilt and origin buttons only when their individual writable capabilities
+  are advertised. The tested VM65CONNECT does not advertise them, and direct
+  commands did not change its image; it no longer gets these five buttons.
 - A lullaby media player with 20 camera-advertised built-in tracks, volume and
   stop controls. Selecting a source starts playback on the camera speaker.
 
-Controls are exposed only for fields advertised by the camera, except PTZ, which
-is limited to VM65 models whose command set was physically validated. Every
-setting write is read back before HA updates its state.
+Controls require a known field, camera-advertised write access and usable
+bounds. Numeric ranges and select options follow those bounds; model names
+alone never enable PTZ. Existing controls become unavailable if their capability
+is withdrawn. Every setting write is read back before HA updates its state.
+The lullaby player appears after a valid playlist is loaded, and its selectable
+sources, stop and volume features follow the corresponding capabilities.
+Selecting a source starts playback; discovery itself does not play audio.
 
 Firmware updates, reset/reboot, debug shell access, storage formatting, song
 upload/removal and arbitrary protocol commands are deliberately blocked. The
@@ -175,6 +182,16 @@ automatic account renewal; credentials can be refreshed manually by account setu
 - Compatibility has been tested with one VM65CONNECT, hardware V1.2.03 and
   firmware V1.6.37. Local snapshot/HLS with H.264 video and AAC mono audio,
   email-code login, telemetry and controls have been verified on this model.
+- Sixteen non-audio settings were changed and restored on VM65CONNECT V1.6.37;
+  image inversion, brightness and night vision had visible effects. All sixteen
+  were exercised through incoming LAN in Home Assistant. Playlist discovery
+  returned 20 tracks, and the camera owner confirmed LAN playlist playback.
+  A follow-up HA test exercised white-noise playback, stop and speaker levels
+  2/3, with microphone signal measurements in memory. Physical hand movement
+  produced both detection events and ten-second binary-sensor pulses.
+  Anti-flicker efficacy, thermal alert firing, sensitivity calibration and
+  spatial zone exclusion have not been established by these setting tests.
+  Physical PTZ on cameras advertising those axes remains unverified.
 - The experimental incoming LAN transport read all 24 supported values on
   VM65CONNECT V1.6.37 with WAN blocked, including a 60-second polling interval
   and socket reconnection. Motion and sound notifications were also received

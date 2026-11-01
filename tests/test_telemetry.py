@@ -172,9 +172,10 @@ def make_control_transport(state, commands):
             response = b"app 1 OK\n"
         elif parts == ["caplist"]:
             response = (
-                b"caplist 5 video_brightness w int 0 4 playing w str 1 128 "
+                b"caplist 9 video_brightness w int 0 4 playing w str 1 128 "
                 b"audio_control w int 0 1 speaker_volume w int 1 6 "
-                b"wifi_ssid r str 1 64\n"
+                b"wifi_ssid r str 1 64 existsongs r str 1 1024 pan w str 1 16 "
+                b"tilt w str 1 16 ptz w str 1 16\n"
             )
         elif parts[:2] == ["set", "existsongs"]:
             response = b"set existsongs Twinkle_Little_Star.mp3,White_Noise.mp3\n"
@@ -225,7 +226,7 @@ async def test_write_playlist_playback_and_ptz_are_strictly_allowlisted():
 
     assert state["video_brightness"] == "2"
     assert b"set playing White_Noise.mp3\n" in commands
-    assert b"set audio_timer 120\n" in commands
+    assert b"set audio_timer 120\n" not in commands
     assert b"set audio_control 0\n" in commands
     assert b"set pan left\n" in commands
     assert b"set pan stop\n" in commands
@@ -244,3 +245,112 @@ async def test_rejects_unknown_writes_songs_and_ptz_without_network():
         with pytest.raises(TelemetryError, match="Unsupported PTZ"):
             await client.async_ptz(CREDENTIALS, "pan", "origin")
     connect.assert_not_awaited()
+
+
+def test_access_and_command_capabilities_are_retained_without_reading_commands():
+    caps = parse_capabilities(
+        [
+            "caplist",
+            "3",
+            "video_brightness",
+            "r",
+            "int",
+            "0",
+            "4",
+            "pan",
+            "w",
+            "str",
+            "1",
+            "16",
+            "existsongs",
+            "r",
+            "str",
+            "1",
+            "1024",
+        ]
+    )
+    assert caps["video_brightness"].writable is False
+    assert caps["pan"].writable is True
+    assert "existsongs" in caps
+
+
+async def test_read_only_setting_and_unadvertised_ptz_never_send_writes():
+    client = TelemetryClient("9.moto.5gencare.com", ssl.create_default_context())
+    reader, writer, commands = make_transport()
+    client._capabilities = {"video_brightness": Capability("int", 0, 4)}
+    with patch("asyncio.open_connection", AsyncMock(return_value=(reader, writer))):
+        with pytest.raises(TelemetryError, match="Invalid camera setting"):
+            await client.async_set(CREDENTIALS, "video_brightness", 2)
+        with pytest.raises(TelemetryError, match="not supported"):
+            await client.async_ptz(CREDENTIALS, "pan", "left")
+    assert not any(command.startswith(b"set ") for command in commands)
+
+
+async def test_command_capabilities_are_not_sent_as_getters():
+    client = TelemetryClient("9.moto.5gencare.com", ssl.create_default_context())
+    reader, writer, commands = make_transport()
+    client._capabilities = {
+        **CAPS,
+        "pan": Capability("str", 1, 16, True),
+        "existsongs": Capability("str", 1, 1024),
+    }
+    with patch("asyncio.open_connection", AsyncMock(return_value=(reader, writer))):
+        data = await client.async_read(CREDENTIALS)
+    assert "pan" in data.capabilities and "existsongs" in data.capabilities
+    assert set(data.values) == set(CAPS)
+    assert b"get 2 temperature_reading wifi_signal\n" in commands
+
+
+async def test_cancelled_direction_still_sends_stop():
+    state = {
+        "video_brightness": "1",
+        "playing": "(none)",
+        "audio_control": "0",
+        "speaker_volume": "4",
+    }
+    commands = []
+    reader, writer = make_control_transport(state, commands)
+    client = TelemetryClient("9.moto.5gencare.com", ssl.create_default_context())
+    with (
+        patch("asyncio.open_connection", AsyncMock(return_value=(reader, writer))),
+        patch("asyncio.sleep", AsyncMock(side_effect=asyncio.CancelledError)),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await client.async_ptz(CREDENTIALS, "pan", "left")
+    assert b"set pan left\n" in commands
+    assert b"set pan stop\n" in commands
+    writer.close.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "axis,direction,reply", [("pan", "left", "stop"), ("ptz", "origin", "0")]
+)
+async def test_false_ptz_acknowledgement_is_rejected(axis, direction, reply):
+    commands = []
+    state = {
+        "video_brightness": "1",
+        "playing": "(none)",
+        "audio_control": "0",
+        "speaker_volume": "4",
+    }
+    reader, writer = make_control_transport(state, commands)
+    write = writer.write.side_effect
+
+    def respond(data):
+        if data == f"set {axis} {direction}\n".encode():
+            commands.append(data)
+            asyncio.get_running_loop().call_soon(
+                reader.feed_data, f"set {axis} {reply}\n".encode()
+            )
+        else:
+            write(data)
+
+    writer.write.side_effect = respond
+    client = TelemetryClient("9.moto.5gencare.com", ssl.create_default_context())
+    with (
+        patch("asyncio.open_connection", AsyncMock(return_value=(reader, writer))),
+        pytest.raises(TelemetryError, match="not confirmed"),
+    ):
+        await client.async_ptz(CREDENTIALS, axis, direction)
+    if axis == "pan":
+        assert b"set pan stop\n" in commands

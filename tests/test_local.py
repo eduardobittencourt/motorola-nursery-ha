@@ -167,25 +167,6 @@ async def test_missing_camera_never_falls_back_to_cloud():
         await client.async_read(CREDENTIALS)
 
 
-@pytest.mark.parametrize(
-    "method,args",
-    [
-        ("async_set", ("video_brightness", 1)),
-        ("async_list_songs", ()),
-        ("async_play", ("Song.mp3",)),
-        ("async_stop", ()),
-        ("async_ptz", ("pan", "left")),
-    ],
-)
-async def test_unvalidated_controls_do_not_send_cloud_or_device_commands(method, args):
-    client = LocalTelemetryClient(Registration(lambda: CREDENTIALS))
-    with (
-        patch("asyncio.open_connection", side_effect=AssertionError("Cloud forbidden")),
-        pytest.raises(TelemetryError, match="not validated"),
-    ):
-        await getattr(client, method)(CREDENTIALS, *args)
-
-
 async def test_cancelled_getter_closes_socket_to_discard_late_responses(socket_enabled):
     server = LocalControlServer(0)
     registration = await server.register("one", lambda: CREDENTIALS)
@@ -427,3 +408,116 @@ async def test_unknown_notification_type_is_acked_without_using_hint_as_event():
     )
     assert not events
     connection.send.assert_awaited_once_with(b"notify 1 1\n")
+
+
+async def test_local_settings_playlist_playback_and_cache_reconnect(socket_enabled):
+    server = LocalControlServer(0)
+    registration = await server.register("controls", lambda: CREDENTIALS)
+    client = LocalTelemetryClient(registration)
+    commands = []
+    state = {
+        "temperature_reading": "239",
+        "video_brightness": "1",
+        "playing": "(none)",
+        "audio_control": "0",
+        "speaker_volume": "4",
+    }
+    capline = (
+        b"caplist 7 temperature_reading r int -200 500 "
+        b"video_brightness w int 0 4 playing w str 1 128 "
+        b"audio_control w int 0 1 speaker_volume w int 1 6 "
+        b"existsongs r str 1 1024 pan w str 1 16\n"
+    )
+    connections = []
+    tasks = []
+
+    async def respond(connection, song):
+        try:
+            while True:
+                parts = (await connection.readline()).decode().split()
+                commands.append(parts)
+                if parts == ["caplist"]:
+                    await connection.send(capline)
+                elif parts[:1] == ["get"]:
+                    keys = parts[2:]
+                    assert not {"existsongs", "pan"} & set(keys)
+                    await connection.send(
+                        (
+                            "get "
+                            + str(len(keys))
+                            + " "
+                            + " ".join(f"{k} {state[k]}" for k in keys)
+                            + "\n"
+                        ).encode()
+                    )
+                elif parts[:2] == ["set", "existsongs"]:
+                    await connection.send(f"set existsongs {song}\n".encode())
+                elif parts[:1] == ["set"]:
+                    key, value = parts[1:]
+                    if key in state:
+                        state[key] = value
+                    await connection.send((" ".join(parts) + "\n").encode())
+                elif parts == ["pong"]:
+                    await connection.send(b"pong 1\n")
+                else:
+                    assert parts == ["notify", "1", "1"]
+        except (EOFError, ConnectionError):
+            return
+
+    try:
+        for index, song in enumerate(("First_Song.mp3", "Second_Song.mp3")):
+            connection = await connected(server.port)
+            connections.append(connection)
+            task = asyncio.create_task(respond(connection, song))
+            tasks.append(task)
+            with patch(
+                "asyncio.open_connection", side_effect=AssertionError("Cloud forbidden")
+            ):
+                data = await client.async_read(CREDENTIALS)
+                assert len(data.capabilities) == 7 and len(data.values) == 5
+                assert await client.async_list_songs(CREDENTIALS) == (song,)
+                assert await client.async_list_songs(CREDENTIALS) == (song,)
+                assert await client.async_set(CREDENTIALS, "video_brightness", 2) == 2
+                if index == 0:
+                    await client.async_play(CREDENTIALS, song)
+                    await client.async_stop(CREDENTIALS)
+                    await client.async_ptz(CREDENTIALS, "pan", "left", duration=0.1)
+            connection.close()
+            await connection.writer.wait_closed()
+            await task
+            for _ in range(10):
+                if not registration.ready.is_set():
+                    break
+                await asyncio.sleep(0)
+        assert commands.count(["set", "existsongs", "1"]) == 2
+        assert ["set", "playing", "First_Song.mp3"] in commands
+        assert ["set", "audio_control", "0"] in commands
+        assert ["set", "pan", "stop"] in commands
+        assert not any(p[:2] == ["set", "audio_timer"] for p in commands)
+    finally:
+        for connection in connections:
+            connection.close()
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await server.unregister("controls")
+
+
+@pytest.mark.parametrize(
+    "method,args",
+    [
+        ("async_set", ("video_brightness", 2)),
+        ("async_list_songs", ()),
+        ("async_play", ("Song.mp3",)),
+        ("async_stop", ()),
+        ("async_ptz", ("pan", "left")),
+    ],
+)
+async def test_missing_local_controls_never_fall_back_to_cloud(method, args):
+    client = LocalTelemetryClient(Registration(lambda: CREDENTIALS))
+    with (
+        patch("custom_components.motorola_nursery.local.TIMEOUT", 0.01),
+        patch("asyncio.open_connection", side_effect=AssertionError("Cloud forbidden")),
+        pytest.raises(TelemetryError, match="Local camera"),
+    ):
+        await getattr(client, method)(CREDENTIALS, *args)

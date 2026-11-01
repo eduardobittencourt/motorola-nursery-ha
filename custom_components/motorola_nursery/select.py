@@ -4,18 +4,8 @@ from homeassistant.components.select import SelectEntity, SelectEntityDescriptio
 from homeassistant.const import EntityCategory
 from homeassistant.core import callback
 
-from .entity import MotorolaTelemetryEntity
-
-OPTION_VALUES = {
-    "night_vision": {"off": 0, "on": 1, "auto": 2},
-    "video_bitrate": {
-        "160_kbit_s": 0,
-        "480_kbit_s": 1,
-        "640_kbit_s": 2,
-        "1000_kbit_s": 3,
-    },
-    "video_light_frequency": {"50_hz": 0, "60_hz": 1},
-}
+from .capabilities import OPTION_VALUES, options, setting_supported
+from .entity import MotorolaSettingEntity, async_remove_unsupported_controls
 
 SELECTS = (
     SelectEntityDescription(
@@ -47,16 +37,27 @@ async def async_setup_entry(hass, entry, async_add_entities):
     if coordinator is None:
         return
     added: set[str] = set()
+    discovered = False
 
     @callback
     def discover():
+        nonlocal discovered
         if not coordinator.last_update_success or coordinator.data is None:
             return
         descriptions = [
             item
             for item in SELECTS
-            if item.key in coordinator.data.capabilities and item.key not in added
+            if setting_supported(coordinator.data, item.key) and item.key not in added
         ]
+        if not discovered:
+            async_remove_unsupported_controls(
+                hass,
+                entry,
+                "select",
+                (item.key for item in SELECTS),
+                (item.key for item in descriptions),
+            )
+            discovered = True
         added.update(item.key for item in descriptions)
         async_add_entities(
             MotorolaSelect(coordinator, entry, item) for item in descriptions
@@ -66,10 +67,18 @@ async def async_setup_entry(hass, entry, async_add_entities):
     discover()
 
 
-class MotorolaSelect(MotorolaTelemetryEntity, SelectEntity):
+class MotorolaSelect(MotorolaSettingEntity, SelectEntity):
     def __init__(self, coordinator, entry, description):
         super().__init__(coordinator, entry, description.key)
         self.entity_description = description
+
+    @property
+    def options(self):
+        return options(self.coordinator.data, self._key)
+
+    @property
+    def available(self):
+        return super().available and self.current_option in self.options
 
     @property
     def current_option(self):

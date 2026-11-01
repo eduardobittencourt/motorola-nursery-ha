@@ -20,7 +20,18 @@ MAX_LINE = 65536
 TIMEOUT = 15
 SONG_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,96}\.mp3")
 
-STRING_FIELDS = frozenset({"hardware_version", "firmware_version", "playing"})
+STRING_FIELDS = frozenset(
+    {
+        "hardware_version",
+        "firmware_version",
+        "playing",
+        "existsongs",
+        "pan",
+        "tilt",
+        "ptz",
+    }
+)
+COMMAND_FIELDS = frozenset({"existsongs", "pan", "tilt", "ptz"})
 
 WRITABLE_FIELDS = frozenset(
     {
@@ -69,17 +80,31 @@ READABLE_FIELDS = frozenset(
 )
 
 
+CONTROL_VALUES = {
+    "night_vision": frozenset(range(3)),
+    "video_bitrate": frozenset(range(4)),
+    "video_light_frequency": frozenset(range(2)),
+    **{
+        key: frozenset({0, 1})
+        for key in WRITABLE_FIELDS
+        if key in {"ceiling_mount", "lowtemp_switch", "hightemp_switch"}
+        or key.startswith("video[0].motion")
+    },
+}
+
+
 class TelemetryError(Exception):
     """A safe error without wire data or credentials."""
 
 
 @dataclass(frozen=True, slots=True)
 class Capability:
-    """Advertised bounds, retained only for explicitly supported getters."""
+    """Advertised type, bounds and access for a known protocol field."""
 
     kind: str
     minimum: int
     maximum: int
+    writable: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +113,7 @@ class TelemetryData:
 
     capabilities: dict[str, Capability] = field(default_factory=dict)
     values: dict[str, int | str | None] = field(default_factory=dict)
+    songs: tuple[str, ...] | None = None
 
 
 def parse_capabilities(parts: list[str]) -> dict[str, Capability]:
@@ -105,13 +131,13 @@ def parse_capabilities(parts: list[str]) -> dict[str, Capability]:
             if key in seen:
                 raise ValueError
             seen.add(key)
-            if key not in READABLE_FIELDS:
+            if key not in READABLE_FIELDS | COMMAND_FIELDS:
                 continue
             minimum, maximum = int(low), int(high)
             expected = "str" if key in STRING_FIELDS else "int"
             if access not in {"r", "w"} or kind != expected or minimum > maximum:
                 raise ValueError
-            result[key] = Capability(kind, minimum, maximum)
+            result[key] = Capability(kind, minimum, maximum, access == "w")
         return result
     except (ValueError, IndexError):
         raise TelemetryError("Invalid capability response") from None
@@ -240,7 +266,21 @@ class TelemetryClient:
             caps = parse_capabilities(
                 await self._exchange(reader, writer, "caplist", "caplist")
             )
+            self._capabilities = caps
         return caps
+
+    @staticmethod
+    def _require_write(caps, key, kind, value=None):
+        cap = caps.get(key)
+        if kind == "str" and value is not None:
+            value = len(value)
+        if (
+            cap is None
+            or not cap.writable
+            or cap.kind != kind
+            or (value is not None and not cap.minimum <= value <= cap.maximum)
+        ):
+            raise TelemetryError("Camera control is not supported")
 
     async def async_read(self, credentials: Credentials) -> TelemetryData:
         """Open one bounded TLS session and read only allowlisted properties."""
@@ -251,24 +291,33 @@ class TelemetryClient:
                     if not caps:
                         self._capabilities = caps
                         return TelemetryData()
-                    keys = sorted(caps)
+                    keys = sorted(caps.keys() & READABLE_FIELDS)
+                    if not keys:
+                        return TelemetryData(dict(caps), {})
                     parts = await self._exchange(
                         reader,
                         writer,
                         f"get {len(keys)} {' '.join(keys)}",
                         "get",
                     )
-                    values = parse_values(parts, caps)
+                    values = parse_values(parts, {key: caps[key] for key in keys})
                     self._capabilities = caps
                     return TelemetryData(dict(caps), values)
             except TelemetryError:
                 self._capabilities = None
+                self._songs = None
                 raise
 
     async def async_set(self, credentials: Credentials, key: str, value: int) -> int:
         """Set one explicitly supported integer field and read it back."""
-        if key not in WRITABLE_FIELDS or isinstance(value, bool):
+        if (
+            key not in WRITABLE_FIELDS
+            or isinstance(value, bool)
+            or not isinstance(value, int)
+        ):
             raise TelemetryError("Unsupported camera setting")
+        if key in CONTROL_VALUES and value not in CONTROL_VALUES[key]:
+            raise TelemetryError("Invalid camera setting value")
         async with self._lock:
             try:
                 async with self._session(credentials) as (reader, writer):
@@ -276,6 +325,7 @@ class TelemetryClient:
                     cap = caps.get(key)
                     if (
                         cap is None
+                        or not cap.writable
                         or cap.kind != "int"
                         or not cap.minimum <= value <= cap.maximum
                     ):
@@ -302,6 +352,7 @@ class TelemetryClient:
                     return result
             except TelemetryError:
                 self._capabilities = None
+                self._songs = None
                 raise
 
     async def async_list_songs(self, credentials: Credentials) -> tuple[str, ...]:
@@ -309,6 +360,9 @@ class TelemetryClient:
         if self._songs is not None:
             return self._songs
         async with self._lock, self._session(credentials) as (reader, writer):
+            caps = await self._get_capabilities(reader, writer)
+            if "existsongs" not in caps:
+                raise TelemetryError("Camera playlist is not supported")
             response = await self._exchange(
                 reader, writer, "set existsongs 1", "set", "existsongs"
             )
@@ -328,6 +382,10 @@ class TelemetryClient:
         if song not in await self.async_list_songs(credentials):
             raise TelemetryError("Unknown camera lullaby")
         async with self._lock, self._session(credentials) as (reader, writer):
+            caps = await self._get_capabilities(reader, writer)
+            self._require_write(caps, "playing", "str", song)
+            if self._songs is None or song not in self._songs:
+                raise TelemetryError("Camera playlist unavailable")
             response = await self._exchange(
                 reader,
                 writer,
@@ -338,13 +396,12 @@ class TelemetryClient:
             )
             if response != ["set", "playing", song]:
                 raise TelemetryError("Lullaby playback was not confirmed")
-            # The app sends this best-effort timer, but the firmware does not
-            # acknowledge it. Playback state remains independently pollable.
-            await self._send(writer, "set audio_timer 120")
 
     async def async_stop(self, credentials: Credentials) -> None:
         """Stop camera-side lullaby playback."""
         async with self._lock, self._session(credentials) as (reader, writer):
+            caps = await self._get_capabilities(reader, writer)
+            self._require_write(caps, "audio_control", "int", 0)
             response = await self._exchange(
                 reader,
                 writer,
@@ -367,17 +424,26 @@ class TelemetryClient:
         allowed = {"pan": {"left", "right"}, "tilt": {"up", "down"}}
         if axis == "ptz" and direction == "origin":
             async with self._lock, self._session(credentials) as (reader, writer):
+                caps = await self._get_capabilities(reader, writer)
+                self._require_write(caps, "ptz", "str", "origin")
                 response = await self._exchange(
                     reader, writer, "set ptz origin", "set", "ptz"
                 )
-                if response[:2] != ["set", "ptz"]:
+                if response != ["set", "ptz", "origin"]:
                     raise TelemetryError("PTZ origin was not confirmed")
             return
         if direction not in allowed.get(axis, set()) or not 0.1 <= duration <= 2:
             raise TelemetryError("Unsupported PTZ command")
         async with self._lock, self._session(credentials) as (reader, writer):
-            await self._send(writer, f"set {axis} {direction}")
+            caps = await self._get_capabilities(reader, writer)
+            self._require_write(caps, axis, "str", direction)
+            self._require_write(caps, axis, "str", "stop")
             try:
+                response = await self._exchange(
+                    reader, writer, f"set {axis} {direction}", "set", axis
+                )
+                if response != ["set", axis, direction]:
+                    raise TelemetryError("PTZ direction was not confirmed")
                 await asyncio.sleep(duration)
             finally:
                 await self._send(writer, f"set {axis} stop")
