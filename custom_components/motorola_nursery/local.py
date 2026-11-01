@@ -302,6 +302,12 @@ class LocalTelemetryClient(TelemetryClient):
         self._last_peer = None
         self._lock = asyncio.Lock()
 
+    async def async_list_songs(self, credentials):
+        """Invalidate the previous peer's playlist before any cache fast path."""
+        if self.registration.peer is not self._last_peer:
+            self._songs = None
+        return await super().async_list_songs(credentials)
+
     @asynccontextmanager
     async def _session(self, credentials):
         peer = None

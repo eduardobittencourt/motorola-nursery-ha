@@ -410,7 +410,11 @@ async def test_unknown_notification_type_is_acked_without_using_hint_as_event():
     connection.send.assert_awaited_once_with(b"notify 1 1\n")
 
 
-async def test_local_settings_playlist_playback_and_cache_reconnect(socket_enabled):
+@pytest.mark.parametrize("play_before_poll", [False, True])
+async def test_local_settings_playlist_playback_and_cache_reconnect(
+    socket_enabled, play_before_poll
+):
+    """Refresh a changed peer's playlist even when playback precedes polling."""
     server = LocalControlServer(0)
     registration = await server.register("controls", lambda: CREDENTIALS)
     client = LocalTelemetryClient(registration)
@@ -473,6 +477,12 @@ async def test_local_settings_playlist_playback_and_cache_reconnect(socket_enabl
             with patch(
                 "asyncio.open_connection", side_effect=AssertionError("Cloud forbidden")
             ):
+                if index == 1 and play_before_poll:
+                    await asyncio.wait_for(registration.ready.wait(), 1)
+                    assert registration.peer is not client._last_peer
+                    assert client._songs == ("First_Song.mp3",)
+                    await client.async_play(CREDENTIALS, song)
+                    assert client._songs == (song,)
                 data = await client.async_read(CREDENTIALS)
                 assert len(data.capabilities) == 7 and len(data.values) == 5
                 assert await client.async_list_songs(CREDENTIALS) == (song,)
