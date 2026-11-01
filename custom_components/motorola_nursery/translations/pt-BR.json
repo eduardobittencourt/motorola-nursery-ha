@@ -49,7 +49,7 @@
       },
       "local_control": {
         "title": "Leituras locais da câmera",
-        "description": "Encaminhe a conexão TCP de controle da câmera, porta 2278, para o Home Assistant. As leituras e os eventos usam somente a rede local, sem fallback para a nuvem. Comandos de configuração, movimento e reprodução ainda não estão disponíveis nesse modo. Consulte o guia de configuração da rede.",
+        "description": "Encaminhe a conexão TCP de controle da câmera, porta 2278, para o Home Assistant. Leituras, eventos, configurações e a playlist usam a rede local, sem fallback para a nuvem. Os controles dependem dos recursos anunciados pela câmera. Consulte o guia de configuração da rede.",
         "data": {
           "local_control": "Usar controle local"
         }

@@ -120,9 +120,9 @@ confirm Motorola Nursery app support. The public product documentation reviewed
 does not specify `v3_dlist`, tunnel credential sizes or local RTSP endpoints.
 Using the same app does not prove matching camera firmware or tunnel behavior.
 The [VM85 product page](https://www.motorolanursery.com/nursery-care-products/connected-video-baby-monitors/vm85-connect)
-also describes motorised pan and digital tilt, so VM65 physical PTZ validation
-must not be applied to VM85. Logging its known family is diagnostic
-classification, not an enablement of PTZ controls.
+also describes motorised pan and digital tilt. This does not validate the
+corresponding protocol commands. Buttons require individual writable
+capabilities; logging a known model family does not enable them.
 
 Complementary public research in
 [Paradox101/motorola-babycam-ha-bridge](https://github.com/Paradox101/motorola-babycam-ha-bridge/blob/main/research/docs/magic-web2-protocol.md)
@@ -156,7 +156,10 @@ use `set <name> <value>` and require an echoed response plus a matching readback
 `get <count> <name> ...` returns `get <count> <name> <value> ...`. A complete,
 matching response is required. Only an explicit allowlist of 24 fields is read;
 telemetry fields become entities, version fields update device metadata, and
-other fields support controls/playback. Capability metadata is cached
+other fields support controls/playback. The access marker is retained and
+checked before writes. `existsongs`, `pan`, `tilt` and `ptz` are retained as
+known command metadata when advertised, but never included in getter batches.
+Capability metadata is cached
 after a successful read, rediscovered after a protocol/transport error, and reset
 when the integration reloads. Each poll opens and closes one TLS connection.
 
@@ -187,9 +190,11 @@ values in one request.
 
 ## Verified controls
 
-All writes below were exercised on the camera and, where applicable, restored to
-their initial values. Numeric and enumerated settings are bounded by the live
-capability metadata before transmission and verified by a subsequent getter.
+The numeric/boolean writes below were exercised on VM65CONNECT V1.6.37 and
+restored to their initial values. Bounds and write access come from live
+capability metadata, and each setting is verified by a subsequent getter.
+This verifies configuration persistence; it does not independently establish
+the efficacy of alert thresholds, sensitivities or spatial detection zones.
 
 - `video_brightness`, `speaker_volume`, `motion`, `sound`,
   `temperature_low` and `temperature_high` are writable numeric settings.
@@ -197,13 +202,19 @@ capability metadata before transmission and verified by a subsequent getter.
   settings. Bitrate levels 0, 1, 2 and 3 yielded 160, 480, 640 and 1000 kbit/s.
 - `ceiling_mount`, both temperature-alert switches, the motion-zone master and
   the four individual zone switches accept 0/1.
-- PTZ uses `set pan left|right`, `set tilt up|down` and a matching `stop`. The
-  integration sends a short pulse and guarantees a stop attempt. Recenter uses
-  `set ptz origin`.
+- PTZ is conditional on writable `pan`, `tilt` and `ptz` capabilities for each
+  respective control. Directional commands require the requested direction to be
+  acknowledged, with a stop attempted even on failure/cancellation. Origin must
+  explicitly acknowledge `origin`. The tested VM65CONNECT advertises none of
+  these capabilities: directions returned `stop`, origin returned `0`, and
+  before/after images showed no change of framing. Earlier protocol ACKs were
+  incorrectly treated as proof of physical PTZ support.
 - `set existsongs 1` returned 20 built-in MP3 names. Playback uses
   `set playing <name>` and stopping uses `set audio_control 0`; state is exposed
-  by `playing` and `audio_control`. The app also sends `set audio_timer 120`, but
-  this firmware does not acknowledge that command.
+  by `playing` and `audio_control`. Discovery runs in a separate background
+  task, retries after failures on every successful poll (including unchanged
+  readings), and is cancelled on unload. The unadvertised/unacknowledged
+  `audio_timer` command is no longer sent.
 
 The advertised microSD getter returned no storage fields on this camera, so
 storage status and formatting are not integrated. Firmware updates, reset,
@@ -301,5 +312,22 @@ and getters still healthy. Sound arrived shortly after that block expired, so
 that trial does not establish offline sound detection or explain the camera's
 alert cadence. Full camera boot with WAN already blocked and prolonged operation
 remain unverified.
-Only getters and notification acknowledgements are implemented. Writable fields,
-playlist discovery, playback and PTZ commands explicitly fail in local mode.
+The LAN client now shares the cloud client's allowlisted control and playlist
+implementation over the authenticated, serialized incoming session. Reconnection
+invalidates both capability and playlist caches. All sixteen non-audio settings
+passed live LAN write/readback and restoration through Home Assistant services.
+Inversion, brightness and night vision also had visible effects in camera images.
+The camera owner confirmed playback from the LAN playlist. A follow-up HA test
+started/stopped white noise and exercised speaker levels 2 and 3. The microphone
+AC signal rose during the higher-volume sample and returned to background after
+stop and HLS buffer drainage; ambient sound was not controlled and this is not
+an acoustic calibration. A physical hand movement produced native motion/sound
+events and ten-second binary-sensor pulses. Anti-flicker efficacy, thermal alert
+firing, sensitivity-response calibration and spatial zone exclusion remain
+unverified. Actual PTZ on models advertising those controls has synthetic
+coverage, without a physical motor test. Playlist discovery does not play audio.
+
+A fully consumed but unusable playlist response leaves the shared LAN peer
+connected, so readings and detection events continue while playlist loading
+retries. Transport, framing and synchronization errors still close the peer
+to prevent a later response from being mistaken for a new request.

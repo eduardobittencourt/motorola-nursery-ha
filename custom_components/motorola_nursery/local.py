@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from .events import CameraEvent, parse_notification
 from .f3 import F3Connection
 from .protocol import Credentials
-from .telemetry import TelemetryClient, TelemetryError
+from .telemetry import PlaylistValidationError, TelemetryClient, TelemetryError
 
 _LOGGER = logging.getLogger(__name__)
 LOCAL_PORT = 2278
@@ -295,12 +295,18 @@ class LocalTelemetryClient(TelemetryClient):
     """The local mode cannot instantiate a cloud control session."""
 
     def __init__(self, registration: Registration):
-        # Only the protocol parsers/cache/command lock are inherited.
+        # Share allowlisted commands and caches; replace only the session transport.
         self.registration = registration
         self._capabilities = None
         self._songs = None
         self._last_peer = None
         self._lock = asyncio.Lock()
+
+    async def async_list_songs(self, credentials):
+        """Invalidate the previous peer's playlist before any cache fast path."""
+        if self.registration.peer is not self._last_peer:
+            self._songs = None
+        return await super().async_list_songs(credentials)
 
     @asynccontextmanager
     async def _session(self, credentials):
@@ -316,6 +322,7 @@ class LocalTelemetryClient(TelemetryClient):
                 async with peer.command_lock:
                     if peer is not self._last_peer:
                         self._capabilities = None
+                        self._songs = None
                         self._last_peer = peer
                     while not peer.responses.empty():
                         peer.responses.get_nowait()
@@ -324,6 +331,9 @@ class LocalTelemetryClient(TelemetryClient):
                         yield peer, LocalWriter(peer)
                     finally:
                         peer.request_pending = False
+        except PlaylistValidationError:
+            # The reply was fully consumed; telemetry/events can reuse this peer.
+            raise
         except asyncio.CancelledError:
             if peer:
                 peer.close()
@@ -332,21 +342,6 @@ class LocalTelemetryClient(TelemetryClient):
             if peer:
                 peer.close()
             raise TelemetryError("Local camera control unavailable") from None
-
-    async def async_set(self, *args, **kwargs):
-        raise TelemetryError("Local setting commands are not validated")
-
-    async def async_list_songs(self, *args, **kwargs):
-        raise TelemetryError("Local playlist commands are not validated")
-
-    async def async_play(self, *args, **kwargs):
-        raise TelemetryError("Local playback commands are not validated")
-
-    async def async_stop(self, *args, **kwargs):
-        raise TelemetryError("Local playback commands are not validated")
-
-    async def async_ptz(self, *args, **kwargs):
-        raise TelemetryError("Local movement commands are not validated")
 
 
 class LocalEventListener:

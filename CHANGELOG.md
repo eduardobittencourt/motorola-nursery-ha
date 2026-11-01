@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.0 — 2026-11-01
+
+- Discover controls from individual camera capabilities, write access and bounds,
+  including per-axis PTZ instead of inferring it from the VM65 model name.
+- Retire unsupported legacy controls only after successful discovery; preserve
+  established identities across transient failures and capability changes.
+- Enable the shared setting and lullaby protocol on incoming LAN connections.
+  Reconnects invalidate capability and playlist caches; there is no cloud fallback.
+- Fix the empty LAN playlist: load advertised tracks separately from telemetry,
+  retry failed discovery even when readings are unchanged, and expose the player
+  only after a valid playlist. Derive playback/stop/volume features from capabilities.
+- Keep LAN readings and events connected after a fully consumed but invalid
+  playlist reply; continue closing the peer after transport/framing failures.
+- Reject read-only writes and false PTZ acknowledgements; stop sending the
+  unadvertised audio-timer command. No playback starts during discovery.
+
 ## 0.7.0 — 2026-10-31
 
 - Accept the optional fifth metadata field on incoming camera detection

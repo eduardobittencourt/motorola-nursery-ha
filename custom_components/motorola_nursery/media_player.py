@@ -1,7 +1,4 @@
-"""Camera-side lullaby playback using its validated built-in playlist."""
-
-import asyncio
-from contextlib import suppress
+"""Camera-side lullabies discovered from a successfully loaded playlist."""
 
 from homeassistant.components.media_player import (
     MediaPlayerEntity,
@@ -9,14 +6,14 @@ from homeassistant.components.media_player import (
     MediaPlayerEntityFeature,
     MediaPlayerState,
 )
+from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError
 
-from .entity import MotorolaCoordinatorEntity
+from .capabilities import playlist_supported, setting_supported, writable
+from .entity import MotorolaCoordinatorEntity, async_remove_unsupported_controls
 
 DESCRIPTION = MediaPlayerEntityDescription(
-    key="lullabies",
-    translation_key="lullabies",
-    icon="mdi:music-box",
+    key="lullabies", translation_key="lullabies", icon="mdi:music-box"
 )
 
 
@@ -24,70 +21,76 @@ async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = entry.runtime_data.telemetry
     if coordinator is None:
         return
-    async_add_entities([MotorolaLullabyPlayer(coordinator, entry)])
+    added = discovered = False
+
+    @callback
+    def discover():
+        nonlocal added, discovered
+        if not coordinator.last_update_success or coordinator.data is None:
+            return
+        supported = playlist_supported(coordinator.data)
+        if not discovered:
+            async_remove_unsupported_controls(
+                hass,
+                entry,
+                "media_player",
+                {"lullabies"},
+                {"lullabies"} if supported else set(),
+            )
+            discovered = True
+        if supported and coordinator.data.songs and not added:
+            added = True
+            async_add_entities([MotorolaLullabyPlayer(coordinator, entry)])
+
+    entry.async_on_unload(coordinator.async_add_listener(discover))
+    discover()
 
 
 class MotorolaLullabyPlayer(MotorolaCoordinatorEntity, MediaPlayerEntity):
-    _attr_supported_features = (
-        MediaPlayerEntityFeature.SELECT_SOURCE
-        | MediaPlayerEntityFeature.STOP
-        | MediaPlayerEntityFeature.VOLUME_SET
-    )
-
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, DESCRIPTION.key)
         self.entity_description = DESCRIPTION
-        self._sources: dict[str, str] = {}
-        self._loading_sources = False
-        self._entry = entry
-        self._source_task: asyncio.Task[None] | None = None
 
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        self._schedule_load_sources()
+    @property
+    def _sources(self):
+        data = self.coordinator.data
+        cap = data.capabilities.get("playing") if data else None
+        if cap is None:
+            return {}
+        songs = data.songs
+        # A filename suffix keeps source names distinct if prettified names collide.
+        names = {}
+        for song in songs or ():
+            if not cap.minimum <= len(song) <= cap.maximum:
+                continue
+            name = song.removesuffix(".mp3").replace("_", " ")
+            if name in names:
+                name = song
+            names[name] = song
+        return names
 
-    async def async_will_remove_from_hass(self) -> None:
-        if self._source_task is not None:
-            self._source_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await self._source_task
-        await super().async_will_remove_from_hass()
-
-    def _schedule_load_sources(self) -> None:
-        if (
-            self.coordinator.last_update_success
-            and self.coordinator.data is not None
-            and not self._sources
-            and (self._source_task is None or self._source_task.done())
-        ):
-            self._source_task = self._entry.async_create_background_task(
-                self.hass, self._async_load_sources(), "Motorola lullaby playlist"
-            )
-
-    async def _async_load_sources(self) -> None:
-        if self._sources or self._loading_sources:
-            return
-        self._loading_sources = True
-        try:
-            songs = await self.coordinator.async_list_songs()
-        except HomeAssistantError:
-            return
-        finally:
-            self._loading_sources = False
-        self._sources = {
-            song.removesuffix(".mp3").replace("_", " "): song for song in songs
-        }
-        self.async_write_ha_state()
-
-    def _handle_coordinator_update(self) -> None:
-        self._schedule_load_sources()
-        super()._handle_coordinator_update()
+    @property
+    def supported_features(self):
+        data = self.coordinator.data
+        features = MediaPlayerEntityFeature(0)
+        if writable(data, "playing", "str") and self._sources:
+            features |= MediaPlayerEntityFeature.SELECT_SOURCE
+        cap = data.capabilities.get("audio_control") if data else None
+        if writable(data, "audio_control") and cap.minimum <= 0 <= cap.maximum:
+            features |= MediaPlayerEntityFeature.STOP
+        if setting_supported(data, "speaker_volume"):
+            features |= MediaPlayerEntityFeature.VOLUME_SET
+        return features
 
     @property
     def available(self) -> bool:
-        values = self.coordinator.data.values if self.coordinator.data else {}
-        return super().available and all(
-            key in values for key in ("playing", "audio_control", "speaker_volume")
+        data = self.coordinator.data
+        return bool(
+            super().available
+            and playlist_supported(data)
+            and self._sources
+            and data.values.get("playing") is not None
+            and data.values.get("audio_control") in (0, 1)
         )
 
     @property
@@ -106,12 +109,7 @@ class MotorolaLullabyPlayer(MotorolaCoordinatorEntity, MediaPlayerEntity):
         data = self.coordinator.data
         playing = data.values.get("playing") if data else None
         return next(
-            (
-                display
-                for display, filename in self._sources.items()
-                if filename == playing
-            ),
-            None,
+            (name for name, song in self._sources.items() if song == playing), None
         )
 
     @property
@@ -121,12 +119,15 @@ class MotorolaLullabyPlayer(MotorolaCoordinatorEntity, MediaPlayerEntity):
     @property
     def volume_level(self):
         data = self.coordinator.data
+        cap = data.capabilities.get("speaker_volume") if data else None
         value = data.values.get("speaker_volume") if data else None
-        return (value - 1) / 5 if isinstance(value, int) else None
+        if cap and isinstance(value, int) and cap.minimum < cap.maximum:
+            return (value - cap.minimum) / (cap.maximum - cap.minimum)
+        return None
 
     async def async_select_source(self, source: str) -> None:
-        if not self._sources:
-            await self._async_load_sources()
+        if not self.supported_features & MediaPlayerEntityFeature.SELECT_SOURCE:
+            raise HomeAssistantError("Camera playback is not supported")
         try:
             song = self._sources[source]
         except KeyError:
@@ -134,8 +135,13 @@ class MotorolaLullabyPlayer(MotorolaCoordinatorEntity, MediaPlayerEntity):
         await self.coordinator.async_play(song)
 
     async def async_media_stop(self) -> None:
+        if not self.supported_features & MediaPlayerEntityFeature.STOP:
+            raise HomeAssistantError("Camera playback stop is not supported")
         await self.coordinator.async_stop_playback()
 
     async def async_set_volume_level(self, volume: float) -> None:
-        raw = min(6, max(1, round(volume * 5) + 1))
+        if not self.supported_features & MediaPlayerEntityFeature.VOLUME_SET:
+            raise HomeAssistantError("Camera volume is not supported")
+        cap = self.coordinator.data.capabilities["speaker_volume"]
+        raw = round(cap.minimum + max(0, min(1, volume)) * (cap.maximum - cap.minimum))
         await self.coordinator.async_set_value("speaker_volume", raw)

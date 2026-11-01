@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import suppress
+from dataclasses import replace
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
@@ -12,6 +15,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .auth import credentials_from_data
+from .capabilities import playlist_supported
 from .cloud import vendor_host
 from .const import CONF_LOCAL_CONTROL, CONF_SESSION, DOMAIN
 from .telemetry import TelemetryClient, TelemetryData, TelemetryError
@@ -35,6 +39,7 @@ class MotorolaTelemetryCoordinator(DataUpdateCoordinator[TelemetryData]):
         )
         self.client = client
         self.entry = entry
+        self._playlist_task: asyncio.Task[None] | None = None
 
     def _credentials(self):
         if not self.entry.data.get(CONF_LOCAL_CONTROL, False):
@@ -46,7 +51,7 @@ class MotorolaTelemetryCoordinator(DataUpdateCoordinator[TelemetryData]):
             return
         values = dict(self.data.values)
         values.update(updates)
-        self.async_set_updated_data(TelemetryData(dict(self.data.capabilities), values))
+        self.async_set_updated_data(replace(self.data, values=values))
 
     async def _async_update_data(self) -> TelemetryData:
         try:
@@ -54,6 +59,14 @@ class MotorolaTelemetryCoordinator(DataUpdateCoordinator[TelemetryData]):
             data = await self.client.async_read(self._credentials())
         except (TelemetryError, ValueError, KeyError):
             raise UpdateFailed("Camera telemetry unavailable") from None
+        if playlist_supported(data):
+            data = replace(data, songs=self.data.songs if self.data else None)
+            if self._playlist_task is None or self._playlist_task.done():
+                self._playlist_task = self.entry.async_create_background_task(
+                    self.hass,
+                    self._async_refresh_playlist(),
+                    "Motorola camera playlist",
+                )
         registry = dr.async_get(self.hass)
         device = registry.async_get_device_by_identifier(
             (DOMAIN, self.entry.unique_id or self.entry.entry_id), self.entry.entry_id
@@ -70,6 +83,28 @@ class MotorolaTelemetryCoordinator(DataUpdateCoordinator[TelemetryData]):
             if versions:
                 registry.async_update_device(device.id, **versions)
         return data
+
+    async def _async_refresh_playlist(self) -> None:
+        # HA starts background tasks eagerly; let the poll publish its data first.
+        await asyncio.sleep(0)
+        try:
+            songs = await self.client.async_list_songs(self._credentials())
+        except (TelemetryError, ValueError, KeyError):
+            # Each successful poll retries, even if readings stay unchanged.
+            songs = None
+        if (
+            self.last_update_success
+            and self.data is not None
+            and playlist_supported(self.data)
+        ):
+            self.async_set_updated_data(replace(self.data, songs=songs))
+
+    async def async_shutdown(self) -> None:
+        if self._playlist_task is not None:
+            self._playlist_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._playlist_task
+        await super().async_shutdown()
 
     async def async_set_value(self, key: str, value: int) -> None:
         """Write and immediately publish one confirmed setting."""

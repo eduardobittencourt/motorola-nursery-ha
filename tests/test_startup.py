@@ -36,8 +36,13 @@ async def test_slow_cloud_does_not_block_video_and_is_cancelled_on_unload(
     entry.add_to_hass(hass)
     started, release, cancelled = asyncio.Event(), asyncio.Event(), asyncio.Event()
     data = TelemetryData(
-        {"temperature_reading": Capability("int", -200, 500)},
-        {"temperature_reading": 241},
+        {
+            "temperature_reading": Capability("int", -200, 500),
+            "playing": Capability("str", 1, 128, True),
+            "audio_control": Capability("int", 0, 1, True),
+            "existsongs": Capability("str", 1, 1024),
+        },
+        {"temperature_reading": 241, "playing": "(none)", "audio_control": 0},
     )
 
     async def block(stage, result):

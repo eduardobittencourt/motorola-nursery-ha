@@ -4,7 +4,8 @@ from homeassistant.components.switch import SwitchEntity, SwitchEntityDescriptio
 from homeassistant.const import EntityCategory
 from homeassistant.core import callback
 
-from .entity import MotorolaTelemetryEntity
+from .capabilities import setting_supported
+from .entity import MotorolaSettingEntity, async_remove_unsupported_controls
 
 SWITCHES = (
     *(
@@ -38,16 +39,27 @@ async def async_setup_entry(hass, entry, async_add_entities):
     if coordinator is None:
         return
     added: set[str] = set()
+    discovered = False
 
     @callback
     def discover():
+        nonlocal discovered
         if not coordinator.last_update_success or coordinator.data is None:
             return
         descriptions = [
             item
             for item in SWITCHES
-            if item.key in coordinator.data.capabilities and item.key not in added
+            if setting_supported(coordinator.data, item.key) and item.key not in added
         ]
+        if not discovered:
+            async_remove_unsupported_controls(
+                hass,
+                entry,
+                "switch",
+                (item.key for item in SWITCHES),
+                (item.key for item in descriptions),
+            )
+            discovered = True
         added.update(item.key for item in descriptions)
         async_add_entities(
             MotorolaSwitch(coordinator, entry, item) for item in descriptions
@@ -57,10 +69,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
     discover()
 
 
-class MotorolaSwitch(MotorolaTelemetryEntity, SwitchEntity):
+class MotorolaSwitch(MotorolaSettingEntity, SwitchEntity):
     def __init__(self, coordinator, entry, description):
         super().__init__(coordinator, entry, description.key)
         self.entity_description = description
+
+    @property
+    def available(self):
+        return super().available and self.value in (0, 1)
 
     @property
     def is_on(self):
