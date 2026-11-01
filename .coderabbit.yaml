@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
-language: pt-BR
+language: en-US
 tone_instructions: "Be concise. Report concrete defects with their trigger and impact. Keep public code and documentation in English."
 reviews:
   profile: chill
