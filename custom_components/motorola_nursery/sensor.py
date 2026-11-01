@@ -9,7 +9,7 @@ from homeassistant.components.sensor import (
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature
 from homeassistant.core import callback
 
-from .entity import MotorolaTelemetryEntity
+from .entity import MotorolaTelemetryEntity, async_remove_setting_mirrors
 
 SENSORS = (
     SensorEntityDescription(
@@ -28,6 +28,13 @@ SENSORS = (
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    SensorEntityDescription(
+        key="videoKbps",
+        translation_key="video_bitrate",
+        icon="mdi:speedometer",
+        native_unit_of_measurement="kbit/s",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
 )
 
 
@@ -42,10 +49,15 @@ async def async_setup_entry(hass, entry, async_add_entities):
     def discover():
         if not coordinator.last_update_success or coordinator.data is None:
             return
+        capabilities = coordinator.data.capabilities
+        if "video_bitrate" in capabilities:
+            async_remove_setting_mirrors(hass, entry, remove_bitrate=True)
         descriptions = [
             item
             for item in SENSORS
-            if item.key in coordinator.data.capabilities and item.key not in added
+            if item.key in capabilities
+            and item.key not in added
+            and (item.key != "videoKbps" or "video_bitrate" not in capabilities)
         ]
         added.update(item.key for item in descriptions)
         async_add_entities(

@@ -83,6 +83,9 @@
       },
       "wifi_signal": {
         "name": "Sinal Wi-Fi"
+      },
+      "video_bitrate": {
+        "name": "Taxa de bits configurada"
       }
     },
     "binary_sensor": {

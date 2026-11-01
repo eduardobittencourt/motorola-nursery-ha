@@ -75,7 +75,9 @@ SETTING_MIRRORS = {
 
 
 @callback
-def async_remove_setting_mirrors(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def async_remove_setting_mirrors(
+    hass: HomeAssistant, entry: ConfigEntry, *, remove_bitrate: bool = False
+) -> None:
     """Retire only this entry's known configuration mirrors from the registry.
 
     Control, measurement and detection identities are preserved. Recorder data
@@ -83,7 +85,12 @@ def async_remove_setting_mirrors(hass: HomeAssistant, entry: ConfigEntry) -> Non
     """
     registry = er.async_get(hass)
     identifier = entry.unique_id or entry.entry_id
-    retired = {(domain, f"{identifier}:{key}") for domain, key in SETTING_MIRRORS}
+    # Preserve the legacy bitrate identity until telemetry confirms a replacement.
+    retired = {
+        (domain, f"{identifier}:{key}")
+        for domain, key in SETTING_MIRRORS
+        if key != "videoKbps" or remove_bitrate
+    }
     for registered in er.async_entries_for_config_entry(registry, entry.entry_id):
         if (
             registered.platform == DOMAIN

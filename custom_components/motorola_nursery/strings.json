@@ -83,6 +83,9 @@
       },
       "wifi_signal": {
         "name": "Wi-Fi signal"
+      },
+      "video_bitrate": {
+        "name": "Configured video bitrate"
       }
     },
     "binary_sensor": {

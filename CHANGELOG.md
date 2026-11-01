@@ -7,6 +7,7 @@
   without exposing the opaque hint. Keep app-facing cloud framing unchanged.
 - Remove 16 sensor/binary-sensor mirrors of camera settings. Number, select and
   switch entities continue to expose current configuration values.
+- Retain the read-only bitrate sensor when no bitrate control is advertised.
 - Keep temperature, Wi-Fi quality and real motion/sound detections. Retire only
   the current entry's obsolete registry identities; preserve control IDs and
   recorder history. References to removed mirrors must use their controls.
