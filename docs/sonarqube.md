@@ -44,7 +44,7 @@ policy without replacing their own test matrices or protocol acceptance tests.
 ## CodeRabbit
 
 `.coderabbit.yaml` enables automatic incremental reviews, including Dependabot
-PRs, and skips drafts. Feedback is Portuguese; public code and documentation
+PRs, skips drafts and disables automatic review pauses after multiple commits. Feedback is Portuguese; public code and documentation
 remain English. Review status blocks on unresolved findings; automatic approval
 is limited to moderate merge risk. Path instructions focus on HA lifecycle,
 protocol correctness, tests and workflow security. AGENTS.md owns integration
