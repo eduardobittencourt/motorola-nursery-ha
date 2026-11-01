@@ -10,6 +10,7 @@ from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfTemperature
 from homeassistant.core import callback
 
 from .entity import MotorolaTelemetryEntity, async_remove_setting_mirrors
+from .select import OPTION_VALUES
 
 SENSORS = (
     SensorEntityDescription(
@@ -50,14 +51,20 @@ async def async_setup_entry(hass, entry, async_add_entities):
         if not coordinator.last_update_success or coordinator.data is None:
             return
         capabilities = coordinator.data.capabilities
-        if "video_bitrate" in capabilities:
+        bitrate_control_ready = (
+            "video_bitrate" in capabilities
+            and coordinator.data.values.get("video_bitrate")
+            in OPTION_VALUES["video_bitrate"].values()
+        )
+        if bitrate_control_ready:
             async_remove_setting_mirrors(hass, entry, remove_bitrate=True)
+            added.discard("videoKbps")
         descriptions = [
             item
             for item in SENSORS
             if item.key in capabilities
             and item.key not in added
-            and (item.key != "videoKbps" or "video_bitrate" not in capabilities)
+            and (item.key != "videoKbps" or not bitrate_control_ready)
         ]
         added.update(item.key for item in descriptions)
         async_add_entities(

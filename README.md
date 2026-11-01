@@ -27,14 +27,15 @@ binary sensors and event entities remain separate from sensitivity controls.
 
 The integration removes its 16 obsolete setting-mirror sensor/binary-sensor
 registry entries automatically (bitrate only after telemetry confirms its
-replacement control). Existing control, measurement and detection entity IDs
-remain unchanged; recorder/history data is not deleted.
+replacement control has a supported value). Existing control, measurement and
+detection entity IDs remain unchanged; recorder/history data is not deleted.
 Update references to the old mirrors before upgrading: use the corresponding
 number, select or switch entity. In particular, configured bitrate is now shown
 by the video-quality select (for example `640_kbit_s`) instead of the numeric
-bitrate sensor. Cameras that advertise only `videoKbps` keep their read-only
-bitrate sensor and its existing ID. The local transport still reports control
-states even though setting writes are not yet supported in that mode.
+bitrate sensor. Cameras without a usable bitrate control keep their read-only
+`videoKbps` sensor. The sensor returns if the replacement becomes unusable.
+The local transport still reports control states even though setting writes
+are not yet supported in that mode.
 
 The sensors share one poll every 60 seconds, use the camera credentials already
 stored in the entry and do not rotate the account session. The cloud client

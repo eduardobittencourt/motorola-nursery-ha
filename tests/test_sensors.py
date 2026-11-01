@@ -152,6 +152,49 @@ async def test_sensor_discovery_outage_recovery_and_unload(hass, bitrate_control
         assert hass.states.get(temperature_id).state == "24.1"
         assert len(hass.states.async_entity_ids("sensor")) == sensor_count
 
+        # A fallback must survive bad replacement values and return after removal.
+        if not bitrate_control:
+            data = TelemetryData(dict(data.capabilities), dict(data.values))
+            data.capabilities["video_bitrate"] = Capability("int", 0, 3)
+            for invalid in (None, 99):
+                data.values["video_bitrate"] = invalid
+                client.async_read.return_value = TelemetryData(
+                    dict(data.capabilities), dict(data.values)
+                )
+                await coordinator.async_refresh()
+                await hass.async_block_till_done()
+                assert entity_id("sensor", "videoKbps") == legacy_bitrate.entity_id
+                assert hass.states.get(legacy_bitrate.entity_id).state == "640"
+
+            for replacement in (None, "absent", 99):
+                data.capabilities["video_bitrate"] = Capability("int", 0, 3)
+                data.values["video_bitrate"] = 2
+                client.async_read.return_value = TelemetryData(
+                    dict(data.capabilities), dict(data.values)
+                )
+                await coordinator.async_refresh()
+                await hass.async_block_till_done()
+                assert entity_id("sensor", "videoKbps") is None
+                assert hass.states.get(legacy_bitrate.entity_id) is None
+                assert (
+                    hass.states.get(entity_id("select", "video_bitrate")).state
+                    == "640_kbit_s"
+                )
+
+                if replacement == "absent":
+                    del data.capabilities["video_bitrate"]
+                    del data.values["video_bitrate"]
+                else:
+                    data.values["video_bitrate"] = replacement
+                client.async_read.return_value = TelemetryData(
+                    dict(data.capabilities), dict(data.values)
+                )
+                await coordinator.async_refresh()
+                await hass.async_block_till_done()
+                assert entity_id("sensor", "videoKbps") == legacy_bitrate.entity_id
+                assert hass.states.get(legacy_bitrate.entity_id).state == "640"
+                assert len(hass.states.async_entity_ids("sensor")) == 3
+
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
         assert not coordinator._listeners
