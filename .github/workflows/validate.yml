@@ -56,5 +56,68 @@ jobs:
       - run: ruff check custom_components tests
       - run: ruff format --check custom_components tests
       - run: bandit -q -r custom_components/motorola_nursery
-      - run: coverage run --source=custom_components/motorola_nursery -m pytest -q
+      - run: coverage run -m pytest -q
+        env:
+          COVERAGE_FILE: .coverage.python
       - run: coverage report --fail-under=80
+        env:
+          COVERAGE_FILE: .coverage.python
+
+      - name: Upload current HA coverage
+        if: matrix.ha == 'current'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-python
+          path: .coverage.python
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  sonar:
+    name: SonarQube scan
+    needs: tests
+    # Fork PRs run tests without receiving the analysis credential.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - name: Download coverage data from this run
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: coverage-*
+          path: coverage-data
+          merge-multiple: true
+      - name: Combine coverage and export XML
+        run: |
+          python -m pip install 'coverage==7.16.2'
+          python -m coverage combine coverage-data
+          python -m coverage xml -o coverage.xml
+      - name: Read integration version
+        run: |
+          python -c 'import json, os; from pathlib import Path; version = json.loads(Path("custom_components/motorola_nursery/manifest.json").read_text())["version"]; print("SONAR_PROJECT_VERSION=" + version, file=open(os.environ["GITHUB_ENV"], "a"))'
+      - name: Require analysis credential
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: test -n "$SONAR_TOKEN"
+      - name: Analyze with SonarQube Cloud
+        uses: SonarSource/sonarqube-scan-action@4d1dc0c91ee400dcf8a6dddf2f705ac36542e304 # v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+        with:
+          args: >-
+            -Dsonar.projectVersion=${{ env.SONAR_PROJECT_VERSION }}
+            -Dsonar.qualitygate.wait=true

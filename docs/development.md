@@ -133,3 +133,7 @@ token cannot undo vendor-side rotation and may require a new email login.
 
 Report tested HA/model/firmware versions and untested paths in the PR. Keep
 session transcripts, timings and local deployment notes outside the repository.
+
+## SonarQube Cloud
+
+See [SonarQube Cloud and coverage](sonarqube.md) for CI analysis, coverage artifacts and external-contribution limits.

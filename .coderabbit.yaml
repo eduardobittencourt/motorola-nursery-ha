@@ -1,11 +1,31 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: pt-BR
+tone_instructions: "Be concise. Report concrete defects with their trigger and impact. Keep public code and documentation in English."
 reviews:
+  profile: chill
+  high_level_summary: true
+  poem: false
   review_progress: true
   commit_status: true
   fail_commit_status: true
   auto_approvals:
     enabled: true
+    max_merge_risk: moderate
   auto_review:
     enabled: true
     auto_incremental_review: true
+    drafts: false
     ignore_usernames: []
+  path_instructions:
+    - path: "custom_components/**"
+      instructions: "Follow AGENTS.md. Prioritize HA lifecycle, protocol framing, credential redaction and resource cleanup. Review vendor changes for provenance and compatibility too."
+    - path: "tests/**"
+      instructions: "Require meaningful regression coverage for changed behavior. Prefer synthetic peers and deterministic cancellation/framing cases. Do not weaken assertions to make CI pass."
+    - path: ".github/workflows/**"
+      instructions: "Preserve required check names and Dependabot behavior. Do not execute untrusted PR code with privileged pull_request_target credentials. Keep third-party actions pinned by commit."
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - AGENTS.md
+      - docs/sonarqube.md
