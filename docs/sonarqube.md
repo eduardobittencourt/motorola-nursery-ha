@@ -62,7 +62,10 @@ suites and the existing security checks.
 Each lock records a SHA-256 digest of its recursively expanded input requirements,
 including extras and markers. This detects input changes even when uv strips
 extras from compiled entries. The generator updates that metadata only after a
-successful compilation; do not update the digest by hand.
+successful compilation, rejecting inputs that changed while compilation ran.
+Each output is staged beside its destination and atomically replaced only after
+metadata validation, preserving the previous lock on compiler, metadata-write or
+publication failure. Do not update the digest by hand.
 
 The generator targets Linux x86_64 and Python 3.14.8, matching the validated
 interpreter patch level; a minor-only target would include patches older than

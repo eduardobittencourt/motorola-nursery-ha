@@ -122,7 +122,10 @@ def test_failed_compile_does_not_mark_changed_inputs_as_locked(tmp_path, monkeyp
     source.write_text("bandit[sarif]==1.9.4\n")
     error = subprocess.CalledProcessError(1, ["uv"])
 
-    def compile_failure(*_args, **_kwargs):
+    def compile_failure(command, *, cwd, check):
+        assert check
+        output = command[command.index("-o") + 1]
+        (cwd / output).write_text("partial compiler output")
         raise error
 
     monkeypatch.setattr(lock_test_dependencies, "ROOT", tmp_path)
@@ -133,3 +136,70 @@ def test_failed_compile_does_not_mark_changed_inputs_as_locked(tmp_path, monkeyp
     assert lock.read_bytes() == previous
     with pytest.raises(ValueError, match="dependency inputs changed"):
         verify_lock_inputs(source, lock)
+
+
+def test_inputs_changed_during_compilation_do_not_replace_previous_lock(
+    tmp_path, monkeypatch
+):
+    """An extras-only edit during compilation must not stamp or publish stale output."""
+    source = tmp_path / "requirements-test.txt"
+    tools = tmp_path / "tools.txt"
+    lock = tmp_path / "requirements-test-current.lock"
+    source.write_text("-r tools.txt\n")
+    tools.write_text("bandit==1.9.4\n")
+    lock.write_text("bandit==1.9.4\n")
+    record_input_digest(source, lock)
+    previous = lock.read_bytes()
+
+    def compile_with_concurrent_edit(command, *, cwd, check):
+        assert check
+        output = command[command.index("-o") + 1]
+        (cwd / output).write_text("bandit==1.9.4\n")
+        tools.write_text("bandit[sarif]==1.9.4\n")
+
+    monkeypatch.setattr(lock_test_dependencies, "ROOT", tmp_path)
+    monkeypatch.setattr(
+        lock_test_dependencies.subprocess, "run", compile_with_concurrent_edit
+    )
+    monkeypatch.setattr("sys.argv", ["lock_test_dependencies.py", "current"])
+    with pytest.raises(ValueError, match="changed during compilation"):
+        lock_test_dependencies.main()
+    assert lock.read_bytes() == previous
+    assert not list(tmp_path.glob(".lock-*"))
+
+
+@pytest.mark.parametrize("failure", ["metadata", "publication"])
+def test_failed_publication_preserves_previous_lock(tmp_path, monkeypatch, failure):
+    """A staged-write or rename failure must preserve the entire previous lock."""
+    source = tmp_path / "requirements-test.txt"
+    lock = tmp_path / "requirements-test-current.lock"
+    source.write_text("bandit==1.9.4\n")
+    lock.write_text("bandit==1.9.4\n")
+    record_input_digest(source, lock)
+    previous = lock.read_bytes()
+
+    def compile_success(command, *, cwd, check):
+        assert check
+        output = command[command.index("-o") + 1]
+        (cwd / output).write_text("bandit==1.9.4\n")
+
+    def fail_metadata(_source, staged, **_kwargs):
+        staged.write_text("partial stamp")
+        raise OSError("Synthetic metadata failure")
+
+    def fail_rename(_self, _target):
+        raise OSError("Synthetic publication failure")
+
+    monkeypatch.setattr(lock_test_dependencies, "ROOT", tmp_path)
+    monkeypatch.setattr(lock_test_dependencies.subprocess, "run", compile_success)
+    monkeypatch.setattr("sys.argv", ["lock_test_dependencies.py", "current"])
+    if failure == "metadata":
+        monkeypatch.setattr(
+            lock_test_dependencies, "record_input_digest", fail_metadata
+        )
+    else:
+        monkeypatch.setattr(Path, "replace", fail_rename)
+    with pytest.raises(OSError, match="Synthetic"):
+        lock_test_dependencies.main()
+    assert lock.read_bytes() == previous
+    assert not list(tmp_path.glob(".lock-*"))
