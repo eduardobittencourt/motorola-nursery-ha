@@ -2,10 +2,11 @@
 
 import asyncio
 import ssl
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 import pytest
 
+from custom_components.motorola_nursery.cloud import CloudError
 from custom_components.motorola_nursery.protocol import Credentials
 from custom_components.motorola_nursery.telemetry import (
     Capability,
@@ -38,8 +39,9 @@ def test_capabilities_filter_personal_data_and_validate_frames():
         "caplist 2 wifi_signal r int 0 100 wifi_signal r int 0 100",
         "caplist 1 wifi_signal r str 0 100",
     ):
+        parts = message.split()
         with pytest.raises(TelemetryError, match="Invalid capability"):
-            parse_capabilities(message.split())
+            parse_capabilities(parts)
 
 
 @pytest.mark.parametrize("value", ["501", "-201", "nan", "secret-value"])
@@ -61,8 +63,9 @@ def test_invalid_sensor_value_does_not_hide_other_sensors(value):
     ],
 )
 def test_partial_or_unexpected_response_is_rejected(message):
+    parts = message.split()
     with pytest.raises(TelemetryError, match="Invalid sensor response") as error:
-        parse_values(message.split(), CAPS)
+        parse_values(parts, CAPS)
     assert "private-network" not in str(error.value)
 
 
@@ -105,11 +108,13 @@ async def test_read_uses_verified_tls_and_only_allowed_getters():
         for _ in range(2):
             data = await client.async_read(CREDENTIALS)
             assert data.values == {"temperature_reading": 241, "wifi_signal": 94}
-    assert context.check_hostname and context.verify_mode == ssl.CERT_REQUIRED
+    assert context.check_hostname
+    assert context.verify_mode == ssl.CERT_REQUIRED
     assert connect.call_args.kwargs["ssl"] is context
     assert connect.call_args.kwargs["server_hostname"] == "9.moto.5gencare.com"
     assert connect.call_args.args[1] == 2288
-    assert b"caplist\n" in first[2] and b"caplist\n" not in second[2]
+    assert b"caplist\n" in first[2]
+    assert b"caplist\n" not in second[2]
     for _, writer, commands in (first, second):
         writer.close.assert_called_once()
         writer.wait_closed.assert_awaited_once()
@@ -156,8 +161,9 @@ async def test_timeout_and_cancellation_close_connection():
 
 
 def test_no_arbitrary_control_host():
-    with pytest.raises(Exception, match="Unexpected authentication server"):
-        TelemetryClient("example.com", ssl.create_default_context())
+    context = ssl.create_default_context()
+    with pytest.raises(CloudError, match="Unexpected authentication server"):
+        TelemetryClient("example.com", context)
 
 
 def make_control_transport(state, commands):
@@ -296,7 +302,8 @@ async def test_command_capabilities_are_not_sent_as_getters():
     }
     with patch("asyncio.open_connection", AsyncMock(return_value=(reader, writer))):
         data = await client.async_read(CREDENTIALS)
-    assert "pan" in data.capabilities and "existsongs" in data.capabilities
+    assert "pan" in data.capabilities
+    assert "existsongs" in data.capabilities
     assert set(data.values) == set(CAPS)
     assert b"get 2 temperature_reading wifi_signal\n" in commands
 
@@ -354,3 +361,54 @@ async def test_false_ptz_acknowledgement_is_rejected(axis, direction, reply):
         await client.async_ptz(CREDENTIALS, axis, direction)
     if axis == "pan":
         assert b"set pan stop\n" in commands
+
+
+@pytest.mark.parametrize(
+    "key,value,expected",
+    [
+        ("playing", "(none)", "(none)"),
+        ("playing", "Song.mp3", "Song.mp3"),
+        ("playing", "../private.mp3", None),
+        ("firmware_version", "V1.6.37", "V1.6.37"),
+        ("firmware_version", "private/value", None),
+        ("firmware_version", "x" * 65, None),
+    ],
+)
+def test_string_readings_remain_filtered_without_losing_other_sensors(
+    key, value, expected
+):
+    capabilities = {key: Capability("str", 1, 128), **CAPS}
+    parts = ["get", "3", key, value, "temperature_reading", "241", "wifi_signal", "94"]
+    assert parse_values(parts, capabilities) == {
+        key: expected,
+        "temperature_reading": 241,
+        "wifi_signal": 94,
+    }
+
+
+@pytest.mark.parametrize(
+    "operation,field,value", [("get", "wifi_signal", None), ("set", "pan", "stop")]
+)
+async def test_exchange_skips_short_and_unrelated_replies_before_exact_match(
+    operation, field, value
+):
+    client = TelemetryClient("9.moto.5gencare.com", ssl.create_default_context())
+    reader = asyncio.StreamReader()
+    writer = Mock(drain=AsyncMock())
+    reply = f"get 1 {field} 94" if operation == "get" else f"set {field} {value}"
+    reader.feed_data(f"\nping\npong\n{operation}\nset pan left\n{reply}\n".encode())
+    reader.feed_eof()
+    result = await client._exchange(reader, writer, None, operation, field, value)
+    assert result == reply.split()
+    assert writer.write.call_args_list == [call(b"pong\n"), call(b"pang\n")]
+
+
+async def test_exchange_rejects_a_flood_of_unrelated_replies():
+    client = TelemetryClient("9.moto.5gencare.com", ssl.create_default_context())
+    reader = asyncio.StreamReader()
+    reader.feed_data(b"get 1 private 1\n" * 65)
+    reader.feed_eof()
+    writer = Mock(drain=AsyncMock())
+    with pytest.raises(TelemetryError, match="Too many unrelated"):
+        await client._exchange(reader, writer, None, "set", "pan", "stop")
+    assert await reader.readline() == b"get 1 private 1\n"

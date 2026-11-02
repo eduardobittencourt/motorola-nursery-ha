@@ -135,7 +135,7 @@ class CameraEventListener:
             self._writer = None
             if writer is not None:
                 writer.close()
-                with suppress(OSError, TimeoutError):
+                with suppress(OSError):
                     async with asyncio.timeout(2):
                         await writer.wait_closed()
 
@@ -150,7 +150,6 @@ class CameraEventListener:
                 KeyError,
                 OSError,
                 RuntimeError,
-                TimeoutError,
                 ValueError,
             ):
                 self._connection_callback(False)

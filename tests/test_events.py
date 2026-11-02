@@ -145,9 +145,10 @@ async def test_connection_and_authentication_have_a_total_deadline(event_entry, 
     with (
         patch("asyncio.open_connection", connect),
         patch("custom_components.motorola_nursery.events.CONNECT_TIMEOUT", 0.01),
-        pytest.raises(TimeoutError),
     ):
-        await asyncio.wait_for(listener._listen_once(), 1)
+        async with asyncio.timeout(1):
+            with pytest.raises(TimeoutError):
+                await listener._listen_once()
     assert connections == [False]
     assert listener._writer is None
     assert writer.close.call_count == (stage == "authenticate")

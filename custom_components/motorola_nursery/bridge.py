@@ -111,7 +111,7 @@ class RtspBridge:
                 completed.result()
         except asyncio.CancelledError:
             raise
-        except (ConnectionError, EOFError, OSError, TimeoutError) as err:
+        except (EOFError, OSError) as err:
             self._on_connection_error(err)
         finally:
             for direction in directions:
@@ -119,8 +119,8 @@ class RtspBridge:
             if directions:
                 await asyncio.gather(*directions, return_exceptions=True)
             writer.close()
-            with contextlib.suppress(ConnectionError, OSError):
+            with contextlib.suppress(OSError):
                 await writer.wait_closed()
             if tunnel is not None:
-                with contextlib.suppress(ConnectionError, OSError):
+                with contextlib.suppress(OSError):
                     await tunnel.close()
