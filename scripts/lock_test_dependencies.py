@@ -48,9 +48,10 @@ def record_input_digest(source: Path, lock: Path) -> None:
         for line in lock.read_text().splitlines()
         if not line.startswith(DIGEST_PREFIX)
     ]
-    lock.write_text(
-        DIGEST_PREFIX + input_digest(source) + "\n" + "\n".join(lines) + "\n"
-    )
+    content = DIGEST_PREFIX + input_digest(source) + "\n" + "\n".join(lines) + "\n"
+    # Dependency text is file content, never an output path.
+    with lock.open("w", encoding="utf-8") as output:
+        output.write(content)
 
 
 def verify_lock_inputs(source: Path, lock: Path) -> None:
