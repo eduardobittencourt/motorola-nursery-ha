@@ -68,6 +68,7 @@ Direct pins live in `requirements-test*.txt`; CI installs the complete hashed
 together. Regenerate with:
 
 ```sh
+. .venv/bin/activate
 python scripts/lock_test_dependencies.py
 ```
 
