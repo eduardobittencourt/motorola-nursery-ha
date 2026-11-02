@@ -74,9 +74,10 @@ recovery, and unload closes clients, background tasks and FFmpeg processes.
 
 ## Dependency pull requests
 
-Dependabot opens grouped weekly update PRs for pip and GitHub Actions through
-`.github/dependabot.yml`. Maintainers review and merge these PRs manually;
-no workflow enables auto-merge for dependency updates.
+Dependabot checks pip and GitHub Actions weekly through `.github/dependabot.yml`.
+Pip updates share one group, and `github/codeql-action` updates share another;
+other GitHub Actions updates open individual PRs. Maintainers review and merge
+these PRs manually; no workflow enables auto-merge for dependency updates.
 
 The `Protect main` repository ruleset requires an up-to-date branch, passing HACS,
 Hassfest, both HA test environments, both CodeQL analyses, the CodeQL result and
