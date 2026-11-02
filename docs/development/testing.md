@@ -5,6 +5,8 @@
 Run commands from the repository root. See [architecture](../reference/architecture.md)
 for module responsibilities.
 
+## Test environments
+
 Use Python 3.14 and a virtual environment:
 
 ```sh
@@ -36,7 +38,10 @@ allowed source packages have no published wheels; their archives and build tools
 are hash-locked, and build isolation is disabled to prevent unpinned build-time
 downloads. Do not widen that exception without reviewing the dependency.
 
-For code changes, run the complete local validation before opening a pull request:
+For code changes, run the following checks in the current HA environment. Before
+opening a pull request, also validate minimum HA in the separate
+[test environment](#test-environments) described above, replacing `current` with
+`minimum` in the lock installation command:
 
 ```sh
 .venv/bin/python -m pip check
