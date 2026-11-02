@@ -65,7 +65,10 @@ recovery, and unload closes clients, background tasks and FFmpeg processes.
 
 Direct pins live in `requirements-test*.txt`; CI installs the complete hashed
 `requirements-test-{current,minimum,build}.lock` files. Update inputs and locks
-together. Regenerate with:
+together. First install the complete [current HA environment](#current-home-assistant)
+above, which includes the locked `uv` executable. The build-tool lock alone
+contains only the tools needed for source-package builds; lock regeneration
+requires the complete current environment. Activate it and regenerate with:
 
 ```sh
 . .venv/bin/activate

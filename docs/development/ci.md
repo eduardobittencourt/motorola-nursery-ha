@@ -7,8 +7,8 @@ HA test matrix, including hash-locked dependency installation, Ruff, Bandit and
 coverage. Use the workflow and requirements files for exact pins and check names.
 CodeQL analyzes Python and Actions in its own workflow.
 
-Sonar imports current-HA coverage from the same workflow run, checks the report
-is nonempty and reads the project version from the integration manifest.
+Sonar imports current-HA coverage from the same workflow run and reads the
+project version from the integration manifest.
 Minimum-HA tests remain mandatory compatibility checks. Analysis settings live
 in `sonar-project.properties`; review settings live in `.coderabbit.yaml`.
 Credentials belong in GitHub secrets and must not be exposed to untrusted PR

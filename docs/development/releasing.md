@@ -3,8 +3,7 @@
 The repository is included in the [default HACS catalog](https://github.com/hacs/default/blob/master/integration).
 Users can find Motorola Nursery in HACS without adding a custom repository.
 
-Keep HACS and Hassfest validation enabled without ignored checks. The scheduled
-validation also checks for changes in upstream requirements.
+Keep HACS and Hassfest validation enabled without ignored checks.
 
 For a release, update `custom_components/motorola_nursery/manifest.json` and
 `CHANGELOG.md`, let validation pass for the release commit, then publish a GitHub
