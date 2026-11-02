@@ -39,6 +39,7 @@ downloads. Do not widen that exception without reviewing the dependency.
 For code changes, run the complete local validation before opening a pull request:
 
 ```sh
+.venv/bin/python -m pip check
 .venv/bin/ruff check custom_components tests scripts
 .venv/bin/ruff format --check custom_components tests scripts
 .venv/bin/bandit -q -r custom_components/motorola_nursery scripts
