@@ -59,16 +59,27 @@ matching lock being regenerated, including Dependabot updates; regenerate and
 commit the affected locks before merging. Dependency updates must run both HA
 suites and the existing security checks.
 
-With uv 0.13.5 and Python 3.14, run:
+Each lock records a SHA-256 digest of its recursively expanded input requirements,
+including extras and markers. This detects input changes even when uv strips
+extras from compiled entries. The generator updates that metadata only after a
+successful compilation; do not update the digest by hand.
+
+The generator targets Linux x86_64 and Python 3.14.8, matching the validated
+interpreter patch level; a minor-only target would include patches older than
+HA supports. With uv 0.13.5, regenerate all locks with:
 
 ```sh
-uv pip compile requirements-test.txt --python-version 3.14 --python-platform x86_64-manylinux_2_39 --generate-hashes -o requirements-test-current.lock
-uv pip compile requirements-test-minimum.txt --python-version 3.14 --python-platform x86_64-manylinux_2_39 --generate-hashes -o requirements-test-minimum.lock
-uv pip compile requirements-test-build.txt --python-version 3.14 --python-platform x86_64-manylinux_2_39 --generate-hashes -o requirements-test-build.lock
+python scripts/lock_test_dependencies.py
 ```
 
-Review changed transitive dependencies and hashes. Use `--upgrade` only for an
+Pass `current`, `minimum` or `build` to regenerate selected environments. Review
+changed transitive dependencies and hashes. Use `--upgrade` only for an
 intentional full refresh, or `--upgrade-package NAME` for a targeted update.
+The generator is included in Ruff, Bandit, coverage and Sonar analysis. Its
+subprocess exceptions are local annotations for invoking the trusted uv executable
+with an argument list and no shell. Tests cover successful metadata generation
+and preserving stale metadata after compiler failure.
+
 The build lock provides setuptools and wheel before installing source-only
 `mock-open` and `pyric`; all other packages must have wheels. The scanner's
 standalone coverage tool remains pinned and wheel-only.

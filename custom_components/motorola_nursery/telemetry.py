@@ -217,6 +217,7 @@ class TelemetryClient:
         field: str | None = None,
         value: str | None = None,
     ) -> list[str]:
+        """Match replies while servicing keepalives and bounding skipped frames."""
         if message is not None:
             await self._send(writer, message)
         for _ in range(64):
@@ -234,6 +235,7 @@ class TelemetryClient:
 
     @asynccontextmanager
     async def _session(self, credentials: Credentials):
+        """Authenticate a bounded TLS control session and always close its writer."""
         owner = atom(str(credentials.sid_user_id))
         token = atom(credentials.magic_token.decode("ascii"))
         writer: asyncio.StreamWriter | None = None

@@ -72,6 +72,7 @@ class FfmpegRelay:
     async def _accept(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
+        """Serve a validated stream request and clean up its process and socket."""
         task = asyncio.current_task()
         if task is None:
             writer.close()

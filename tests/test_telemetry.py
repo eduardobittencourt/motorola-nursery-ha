@@ -30,6 +30,7 @@ CAP_LINE = (
 
 
 def test_capabilities_filter_personal_data_and_validate_frames():
+    """Discover only known capabilities after checking complete row framing."""
     assert parse_capabilities(CAP_LINE.decode().split()) == CAPS
     for message in (
         "caplist -1",
@@ -63,6 +64,7 @@ def test_invalid_sensor_value_does_not_hide_other_sensors(value):
     ],
 )
 def test_partial_or_unexpected_response_is_rejected(message):
+    """Partial or mismatched sensor frames must fail without private payloads."""
     parts = message.split()
     with pytest.raises(TelemetryError, match="Invalid sensor response") as error:
         parse_values(parts, CAPS)
@@ -99,6 +101,7 @@ def make_transport(
 
 
 async def test_read_uses_verified_tls_and_only_allowed_getters():
+    """Telemetry must verify vendor TLS and query only allowlisted readings."""
     context = ssl.create_default_context()
     client = TelemetryClient("9.moto.5gencare.com", context)
     first, second = make_transport(), make_transport()
@@ -161,6 +164,7 @@ async def test_timeout_and_cancellation_close_connection():
 
 
 def test_no_arbitrary_control_host():
+    """Control connections must reject hosts outside the vendor domain."""
     context = ssl.create_default_context()
     with pytest.raises(CloudError, match="Unexpected authentication server"):
         TelemetryClient("example.com", context)
@@ -293,6 +297,7 @@ async def test_read_only_setting_and_unadvertised_ptz_never_send_writes():
 
 
 async def test_command_capabilities_are_not_sent_as_getters():
+    """Command capabilities must remain visible without becoming sensor queries."""
     client = TelemetryClient("9.moto.5gencare.com", ssl.create_default_context())
     reader, writer, commands = make_transport()
     client._capabilities = {
@@ -377,6 +382,7 @@ async def test_false_ptz_acknowledgement_is_rejected(axis, direction, reply):
 def test_string_readings_remain_filtered_without_losing_other_sensors(
     key, value, expected
 ):
+    """Unsafe string readings must not hide valid readings in the same frame."""
     capabilities = {key: Capability("str", 1, 128), **CAPS}
     parts = ["get", "3", key, value, "temperature_reading", "241", "wifi_signal", "94"]
     assert parse_values(parts, capabilities) == {
@@ -392,6 +398,7 @@ def test_string_readings_remain_filtered_without_losing_other_sensors(
 async def test_exchange_skips_short_and_unrelated_replies_before_exact_match(
     operation, field, value
 ):
+    """Keepalives and stale replies must not satisfy a different control request."""
     client = TelemetryClient("9.moto.5gencare.com", ssl.create_default_context())
     reader = asyncio.StreamReader()
     writer = Mock(drain=AsyncMock())
@@ -404,6 +411,7 @@ async def test_exchange_skips_short_and_unrelated_replies_before_exact_match(
 
 
 async def test_exchange_rejects_a_flood_of_unrelated_replies():
+    """A request must stop after its bounded allowance of unrelated replies."""
     client = TelemetryClient("9.moto.5gencare.com", ssl.create_default_context())
     reader = asyncio.StreamReader()
     reader.feed_data(b"get 1 private 1\n" * 65)

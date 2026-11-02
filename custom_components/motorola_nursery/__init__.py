@@ -60,6 +60,7 @@ class RuntimeData:
     local_server: LocalControlServer | None = None
 
     async def async_prepare_stream(self, *, force: bool = False) -> None:
+        """Probe local video and recover account credentials with bounded retries."""
         # Existing imported entries remain fully compatible and local.
         if CONF_SESSION not in self.entry.data or self.entry.data.get(
             CONF_LOCAL_CONTROL, False
@@ -158,6 +159,7 @@ async def _async_setup_telemetry(hass, entry, runtime):
         runtime.telemetry = MotorolaTelemetryCoordinator(hass, entry, client)
 
         def local_connection_changed(connected):
+            """Refresh recovered peers and expose disconnects without cloud fallback."""
             if runtime.stopping:
                 return
             if connected:

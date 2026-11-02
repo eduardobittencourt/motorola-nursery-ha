@@ -81,6 +81,7 @@ class RtspBridge:
     async def _forward(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
+        """Forward both directions and release the tunnel after either side closes."""
         tunnel: MagicP2PTunnel | None = None
         directions: set[asyncio.Task] = set()
         try:

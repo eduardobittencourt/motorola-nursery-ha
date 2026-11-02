@@ -243,6 +243,7 @@ class CloudClient:
         self._lock = asyncio.Lock()
 
     async def connect(self) -> None:
+        """Open one bounded TLS connection to the validated vendor endpoint."""
         if self._writer is not None:
             raise RuntimeError("Client is already connected")
         route = "bootstrap" if self.host == DEFAULT_HOST else "vendor_routed"
@@ -275,6 +276,7 @@ class CloudClient:
         self._reader_task = asyncio.create_task(self._receive(reader))
 
     async def _receive(self, reader: asyncio.StreamReader) -> None:
+        """Validate frames and report queue failure without exposing payloads."""
         try:
             while True:
                 raw = await reader.readline()
@@ -307,6 +309,7 @@ class CloudClient:
             self._messages.put_nowait(parts)
 
     async def close(self) -> None:
+        """Cancel the reader and bound the wait for TLS socket shutdown."""
         if self._reader_task is not None:
             self._reader_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -320,6 +323,7 @@ class CloudClient:
             self._writer = None
 
     async def _exchange(self, command: str, *fields: str) -> list[str]:
+        """Send one validated command and skip a bounded number of unrelated replies."""
         if self._writer is None:
             raise ConnectionError("Client is not connected")
         message = " ".join([atom(command), *(atom(value) for value in fields)]) + "\n"
@@ -423,6 +427,7 @@ class CloudClient:
     async def submit_code(
         self, challenge: Challenge, login_uuid: str, email: str, code: str
     ) -> Session:
+        """Validate an ASCII email code before exchanging it for a saved session."""
         if not re.fullmatch(r"\d{6}", code, flags=re.ASCII):
             _LOGGER.debug("Account code submission failed: reason=invalid_code_format")
             raise ValueError("Expected a six-digit email code")

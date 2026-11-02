@@ -56,10 +56,10 @@ downloads. Do not widen that exception without reviewing the dependency.
 For code changes, run the complete local validation before opening a pull request:
 
 ```sh
-.venv/bin/ruff check custom_components tests
-.venv/bin/ruff format --check custom_components tests
-.venv/bin/bandit -q -r custom_components/motorola_nursery
-.venv/bin/coverage run --source=custom_components/motorola_nursery -m pytest -q
+.venv/bin/ruff check custom_components tests scripts
+.venv/bin/ruff format --check custom_components tests scripts
+.venv/bin/bandit -q -r custom_components/motorola_nursery scripts
+.venv/bin/coverage run -m pytest -q
 .venv/bin/coverage report --fail-under=80
 ```
 

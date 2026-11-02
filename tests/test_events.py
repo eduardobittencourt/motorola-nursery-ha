@@ -129,6 +129,7 @@ async def test_reconnect_backoff_is_bounded_and_resets_after_authentication(
 
 @pytest.mark.parametrize("stage", ["connect", "authenticate"])
 async def test_connection_and_authentication_have_a_total_deadline(event_entry, stage):
+    """Connection and authentication together must respect the listener deadline."""
     reader = asyncio.StreamReader()
     writer = Mock(drain=AsyncMock(), wait_closed=AsyncMock())
 

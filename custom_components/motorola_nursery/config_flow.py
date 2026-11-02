@@ -278,6 +278,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_host(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Probe the selected camera before persisting account or host changes."""
         if self._selected is None or self._session is None:
             return self.async_abort(reason="login_connection_lost")
         target = self._target_entry()

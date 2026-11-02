@@ -51,11 +51,13 @@ class LocalPeer:
         self.closed = False
 
     async def send(self, data: bytes) -> None:
+        """Reject sends after closure before touching the encrypted connection."""
         if self.closed:
             raise EOFError(DISCONNECTED)
         await self.connection.send(data)
 
     async def readline(self) -> bytes:
+        """Deliver queued replies or propagate the peer shutdown sentinel."""
         line = await self.responses.get()
         if line is None:
             raise EOFError(DISCONNECTED)
@@ -105,6 +107,7 @@ class LocalPeer:
             self.responses.put_nowait(line)
 
     async def _handle_notification(self, parts: list[str]) -> None:
+        """Acknowledge authenticated events and deduplicate them across reconnects."""
         credentials = self.registration.credentials()
         # Camera-originated notifications may append an opaque upload hint.
         # The app-facing channel uses four fields. Never expose this hint.
@@ -213,6 +216,7 @@ class LocalControlServer:
         return matches[0]
 
     async def _handle(self, reader, writer) -> None:
+        """Authenticate one camera and retire only its own active registration."""
         registration = peer = None
         stage = "handshake"
         try:
@@ -258,6 +262,7 @@ class LocalControlServer:
             EOFError,
             ValueError,
             RuntimeError,
+            asyncio.QueueFull,
         ) as error:
             _LOGGER.debug(
                 "Local camera control closed: stage=%s category=%s",
@@ -312,6 +317,7 @@ class LocalTelemetryClient(TelemetryClient):
 
     @asynccontextmanager
     async def _session(self, credentials):
+        """Serialize local commands and discard sessions with uncertain framing."""
         peer = None
         try:
             async with asyncio.timeout(TIMEOUT):

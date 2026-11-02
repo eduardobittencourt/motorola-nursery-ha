@@ -235,6 +235,7 @@ async def test_routing_and_later_authentication_failures(caplog):
 
 @pytest.mark.asyncio
 async def test_session_rejection_contains_no_payload():
+    """Rejected sessions must not persist or disclose the response payload."""
     client = CloudClient(ssl.create_default_context())
     from unittest.mock import AsyncMock
 
@@ -497,6 +498,7 @@ def test_device_list_existing_credential_boundaries_remain_supported(
     "payload", [b"\xff\n", b"incomplete", b"reply private\n" * 65, b""]
 )
 async def test_reader_failure_keeps_a_bounded_queue_and_safe_error(payload, caplog):
+    """Malformed or excessive cloud frames must end with a sanitized failure."""
     client = CloudClient(ssl.create_default_context())
     reader = asyncio.StreamReader()
     reader.feed_data(payload)
@@ -515,6 +517,7 @@ async def test_reader_failure_keeps_a_bounded_queue_and_safe_error(payload, capl
 
 @pytest.mark.parametrize("code", ["１２３４５６", "١٢٣٤٥٦", "12345", "123456\n"])
 async def test_email_code_requires_exactly_six_ascii_digits_without_network(code):
+    """Invalid email codes must be rejected before any network operation."""
     from custom_components.motorola_nursery.cloud import Challenge
 
     client = CloudClient(ssl.create_default_context())

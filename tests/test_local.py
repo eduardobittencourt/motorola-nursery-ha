@@ -128,6 +128,7 @@ async def test_local_read_events_and_reconnect(socket_enabled):
 async def test_unknown_camera_is_rejected_without_secret_logs(
     socket_enabled, caplog, line
 ):
+    """Unknown identities must disconnect without logging credentials."""
     server = LocalControlServer(0)
     await server.register("camera-one", lambda: CREDENTIALS)
     try:
@@ -169,6 +170,7 @@ async def test_missing_camera_never_falls_back_to_cloud():
 
 
 async def test_cancelled_getter_closes_socket_to_discard_late_responses(socket_enabled):
+    """Cancelled reads must close the peer so late replies cannot satisfy new reads."""
     server = LocalControlServer(0)
     registration = await server.register("one", lambda: CREDENTIALS)
     connection = await connected(server.port)
@@ -236,6 +238,7 @@ async def test_late_connection_gets_full_command_deadline():
 
 
 async def test_malformed_reply_invalidates_persistent_session(socket_enabled):
+    """Malformed control frames must retire the shared persistent session."""
     server = LocalControlServer(0)
     registration = await server.register("one", lambda: CREDENTIALS)
     connection = await connected(server.port)
@@ -288,6 +291,7 @@ async def test_setup_ack_required_before_getters(socket_enabled):
 async def test_missing_or_rejected_setup_never_becomes_ready(
     socket_enabled, acknowledgement
 ):
+    """Only a complete successful initialization may publish a ready peer."""
     server = LocalControlServer(0)
     registration = await server.register("one", lambda: CREDENTIALS)
     try:
@@ -323,6 +327,7 @@ async def test_shutdown_aborts_stalled_transports_within_deadline():
 
 @pytest.mark.parametrize("ambiguous", [False, True])
 async def test_multiple_entries_require_unique_registration(socket_enabled, ambiguous):
+    """Camera identity must select exactly one registration across entries."""
     second_credentials = replace(
         CREDENTIALS,
         sid_device=b"second-device",
@@ -530,6 +535,7 @@ async def test_local_settings_playlist_playback_and_cache_reconnect(
     ],
 )
 async def test_missing_local_controls_never_fall_back_to_cloud(method, args):
+    """Every local control operation must fail locally when its peer is absent."""
     client = LocalTelemetryClient(Registration(lambda: CREDENTIALS))
     control = getattr(client, method)
     with (
@@ -626,3 +632,31 @@ async def test_incomplete_playlist_response_still_closes_shared_peer(socket_enab
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
         await server.unregister("playlist")
+
+
+async def test_response_queue_overflow_is_handled_and_releases_registration(
+    socket_enabled,
+):
+    """A flooding authenticated peer disconnects without an escaped task exception."""
+    server = LocalControlServer(0)
+    registration = await server.register("flood", lambda: CREDENTIALS)
+    connection = await connected(server.port)
+    try:
+        async with asyncio.timeout(1):
+            await registration.ready.wait()
+        peer = registration.peer
+        assert peer is not None
+        handler = next(iter(server._tasks))
+        peer.request_pending = True
+        await connection.send(b"get 1 wifi_signal 94\n" * 65)
+        async with asyncio.timeout(1):
+            await handler
+        assert peer.closed
+        assert registration.peer is None
+        assert not registration.ready.is_set()
+        assert peer.responses.qsize() == 1
+        assert peer.responses.get_nowait() is None
+    finally:
+        connection.close()
+        await connection.writer.wait_closed()
+        await server.unregister("flood")

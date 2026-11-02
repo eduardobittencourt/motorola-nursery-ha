@@ -55,9 +55,9 @@ jobs:
           --no-binary=mock-open,pyric --no-build-isolation
           -r requirements-test-${{ matrix.ha }}.lock
       - run: python -m pip check
-      - run: ruff check custom_components tests
-      - run: ruff format --check custom_components tests
-      - run: bandit -q -r custom_components/motorola_nursery
+      - run: ruff check custom_components tests scripts
+      - run: ruff format --check custom_components tests scripts
+      - run: bandit -q -r custom_components/motorola_nursery scripts
       - run: coverage run -m pytest -q
         env:
           COVERAGE_FILE: .coverage.python
