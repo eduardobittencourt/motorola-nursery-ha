@@ -145,13 +145,13 @@ class FfmpegRelay:
                 self._on_process_error(return_code)
         except asyncio.CancelledError:
             raise
-        except (BrokenPipeError, ConnectionError, OSError):
+        except OSError:
             pass
         finally:
             if process is not None:
                 await self._stop_process(process)
             writer.close()
-            with contextlib.suppress(ConnectionError, OSError):
+            with contextlib.suppress(OSError):
                 await writer.wait_closed()
             self._tasks.discard(task)
 

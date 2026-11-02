@@ -132,8 +132,9 @@ async def test_unknown_camera_is_rejected_without_secret_logs(
     await server.register("camera-one", lambda: CREDENTIALS)
     try:
         connection = await camera(server.port, line)
-        with pytest.raises(EOFError):
-            await asyncio.wait_for(connection.readline(), 1)
+        async with asyncio.timeout(1):
+            with pytest.raises(EOFError):
+                await connection.readline()
         connection.close()
         await connection.writer.wait_closed()
         assert "private-wrong-token" not in caplog.text
@@ -178,8 +179,9 @@ async def test_cancelled_getter_closes_socket_to_discard_late_responses(socket_e
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
-        with pytest.raises(EOFError):
-            await asyncio.wait_for(connection.readline(), 1)
+        async with asyncio.timeout(1):
+            with pytest.raises(EOFError):
+                await connection.readline()
     finally:
         connection.close()
         await connection.writer.wait_closed()
@@ -244,8 +246,9 @@ async def test_malformed_reply_invalidates_persistent_session(socket_enabled):
         await connection.send(b"caplist invalid\n")
         with pytest.raises(TelemetryError):
             await task
-        with pytest.raises(EOFError):
-            await asyncio.wait_for(connection.readline(), 1)
+        async with asyncio.timeout(1):
+            with pytest.raises(EOFError):
+                await connection.readline()
     finally:
         connection.close()
         await connection.writer.wait_closed()
@@ -294,8 +297,9 @@ async def test_missing_or_rejected_setup_never_becomes_ready(
             connection = await connected(server.port, acknowledge=False)
             if acknowledgement is not None:
                 await connection.send(acknowledgement)
-            with pytest.raises(EOFError):
-                await asyncio.wait_for(connection.readline(), 1)
+            async with asyncio.timeout(1):
+                with pytest.raises(EOFError):
+                    await connection.readline()
             assert not registration.ready.is_set()
             connection.close()
             await connection.writer.wait_closed()
@@ -331,8 +335,9 @@ async def test_multiple_entries_require_unique_registration(socket_enabled, ambi
     try:
         if ambiguous:
             connection = await camera(server.port)
-            with pytest.raises(EOFError):
-                await asyncio.wait_for(connection.readline(), 1)
+            async with asyncio.timeout(1):
+                with pytest.raises(EOFError):
+                    await connection.readline()
             assert first.peer is None
             assert not first.ready.is_set()
         else:
@@ -484,7 +489,8 @@ async def test_local_settings_playlist_playback_and_cache_reconnect(
                     await client.async_play(CREDENTIALS, song)
                     assert client._songs == (song,)
                 data = await client.async_read(CREDENTIALS)
-                assert len(data.capabilities) == 7 and len(data.values) == 5
+                assert len(data.capabilities) == 7
+                assert len(data.values) == 5
                 assert await client.async_list_songs(CREDENTIALS) == (song,)
                 assert await client.async_list_songs(CREDENTIALS) == (song,)
                 assert await client.async_set(CREDENTIALS, "video_brightness", 2) == 2
@@ -525,12 +531,13 @@ async def test_local_settings_playlist_playback_and_cache_reconnect(
 )
 async def test_missing_local_controls_never_fall_back_to_cloud(method, args):
     client = LocalTelemetryClient(Registration(lambda: CREDENTIALS))
+    control = getattr(client, method)
     with (
         patch("custom_components.motorola_nursery.local.TIMEOUT", 0.01),
         patch("asyncio.open_connection", side_effect=AssertionError("Cloud forbidden")),
         pytest.raises(TelemetryError, match="Local camera"),
     ):
-        await getattr(client, method)(CREDENTIALS, *args)
+        await control(CREDENTIALS, *args)
 
 
 @pytest.mark.parametrize("payload", [b"", b"Song.mp3,Song.mp3", b"../private.mp3"])
@@ -573,12 +580,14 @@ async def test_invalid_complete_playlist_preserves_readings_events_and_retry(
             ) as error:
                 await client.async_list_songs(CREDENTIALS)
             assert "private" not in str(error.value)
-            assert registration.peer is peer and not peer.closed
+            assert registration.peer is peer
+            assert not peer.closed
             assert (await client.async_read(CREDENTIALS)).values == {"wifi_signal": 72}
             assert await client.async_list_songs(CREDENTIALS) == ("Song.mp3",)
         await task
         assert [event.event_type for event in events] == ["motion"]
-        assert registration.ready.is_set() and registration.peer is peer
+        assert registration.ready.is_set()
+        assert registration.peer is peer
     finally:
         connection.close()
         await connection.writer.wait_closed()
