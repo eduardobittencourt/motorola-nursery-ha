@@ -53,6 +53,9 @@ a successful scanner job alone does not prove that GitHub decoration works.
 Fork PRs run tests without the Sonar token. Before merging an external
 contribution that needs analysis, review it and bring the change to a branch
 in this repository so the ordinary CI scanner can analyze it with coverage.
+Before creating that branch, review changes to `sonar-project.properties` and
+`.github/workflows/`; re-review each additional change before pushing it to the
+analysis branch.
 A skipped fork scan must not be treated as a successful Sonar analysis. No
 privileged fork-analysis workflow is configured.
 
