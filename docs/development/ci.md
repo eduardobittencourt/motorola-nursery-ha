@@ -48,7 +48,7 @@ scanner's `sonar.qualitygate.wait=true` makes rejected gates fail the job.
 Keep the SonarQube Cloud project bound to the correct GitHub repository and
 allow the SonarQube Cloud GitHub App to access it. The native app publishes
 `SonarCloud Code Analysis` and PR summaries separately from the Actions job.
-The native check has been verified on PRs and is required by the merge rules.
+`SonarCloud Code Analysis` is required by the merge rules.
 If it stops appearing, investigate the binding and app access; a successful
 scanner job alone does not prove that GitHub decoration works.
 
