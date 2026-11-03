@@ -33,4 +33,5 @@ The required Sonar status check is `SonarQube scan`, provided by GitHub Actions
 job fails if analysis fails or the quality gate is rejected. Keep the required
 check name aligned with the workflow job; the separate SonarCloud GitHub App
 check, `SonarCloud Code Analysis`, is not required by this CI setup. Fork PRs
-continue to run without scanner credentials.
+run the test jobs while `SonarQube scan` and its quality gate are skipped;
+scanner credentials are never provided to fork PRs.
