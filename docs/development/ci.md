@@ -52,12 +52,12 @@ The native check has been verified on PRs and is required by the merge rules.
 If it stops appearing, investigate the binding and app access; a successful
 scanner job alone does not prove that GitHub decoration works.
 
-Fork PRs run tests without the Sonar token. Before merging an external
-contribution that needs analysis, review it and bring the change to a branch
-in this repository so the ordinary CI scanner can analyze it with coverage.
-Before creating that branch, review changes to `sonar-project.properties` and
-`.github/workflows/`; re-review each additional change before pushing it to the
-analysis branch.
+Fork PRs run tests without the Sonar token. To analyze an external contribution
+with coverage, first review all changes, including `sonar-project.properties`
+and `.github/workflows/`. Then push the reviewed changes to a branch in this
+repository and open a same-repository PR targeting `main`; its pull-request
+workflow runs the ordinary CI scanner. Review each additional change before
+pushing it to that branch.
 A skipped fork scan must not be treated as a successful Sonar analysis. No
 privileged fork-analysis workflow is configured.
 
