@@ -28,11 +28,12 @@ on real accounts, email delivery, camera credentials or private captures.
 Use [testing](testing.md) to reproduce checks and maintain dependency locks.
 Changes to minimum HA support must keep `hacs.json`, README and matrix aligned.
 
-The required Sonar status check is `SonarQube scan`, provided by GitHub Actions
-(app ID `15368`). The scanner runs with `sonar.qualitygate.wait=true`, so this
-job fails if analysis fails or the quality gate is rejected. Keep the required
-check name aligned with the workflow job; the separate SonarCloud GitHub App
-check, `SonarCloud Code Analysis`, is not required by this CI setup. Fork PRs
+Required Sonar checks are `SonarQube scan` from GitHub Actions (app ID `15368`)
+and `SonarCloud Code Analysis` from the SonarQube Cloud GitHub App (app ID
+`12526`). The scanner uses `sonar.qualitygate.wait=true`, so analysis failures
+and rejected quality gates fail the job. The native check independently reports
+the quality gate on the PR. Keep both required check names and their expected
+apps aligned with the published checks. Fork PRs
 run the test jobs while `SonarQube scan` and its quality gate are skipped;
 scanner credentials are never provided to fork PRs.
 
@@ -47,8 +48,9 @@ scanner's `sonar.qualitygate.wait=true` makes rejected gates fail the job.
 Keep the SonarQube Cloud project bound to the correct GitHub repository and
 allow the SonarQube Cloud GitHub App to access it. The native app publishes
 `SonarCloud Code Analysis` and PR summaries separately from the Actions job.
-Validate that check on a real PR before adding it to required status checks;
-a successful scanner job alone does not prove that GitHub decoration works.
+The native check has been verified on PRs and is required by the merge rules.
+If it stops appearing, investigate the binding and app access; a successful
+scanner job alone does not prove that GitHub decoration works.
 
 Fork PRs run tests without the Sonar token. Before merging an external
 contribution that needs analysis, review it and bring the change to a branch
