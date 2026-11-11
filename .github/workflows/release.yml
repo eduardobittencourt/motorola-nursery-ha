@@ -1,15 +1,28 @@
-name: Package integration release
+name: Publish integration release
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing reviewed version tag (for example v0.8.1)
+        type: string
+        required: true
+      prerelease:
+        description: Publish as a beta/prerelease without changing latest
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+concurrency:
+  group: integration-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
 jobs:
   package:
-    name: Attach HACS package
+    name: Package before publishing
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -17,21 +30,37 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          path: trusted
           persist-credentials: false
-      - name: Check release version and create integration-only ZIP
+      - name: Validate release tag
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           python3 -I - <<'PY'
-          import json, os, re
+          import os, re
+          tag = os.environ['RELEASE_TAG']
+          assert len(tag) <= 65 and re.fullmatch(r'v\d++\.\d++\.\d++[A-Za-z0-9.+_-]*+', tag, re.ASCII), 'Invalid release tag'
+          PY
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ inputs.tag }}
+          path: source
+          persist-credentials: false
+      - name: Verify manifest and create integration-only ZIP
+        working-directory: source
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          python3 -I - <<'PY'
+          import json, os
           from pathlib import Path
           version = json.loads(Path('custom_components/motorola_nursery/manifest.json').read_text())['version']
-          assert re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9.+_-]*', version)
           assert os.environ['RELEASE_TAG'] == 'v' + version, 'Release tag and manifest version differ'
           PY
           git archive --format=zip HEAD:custom_components/motorola_nursery > "$RUNNER_TEMP/motorola_nursery.zip"
-      - name: Attach package without replacing an existing asset
+      - name: Create draft, attach package, then publish
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/motorola_nursery.zip" --repo "$GITHUB_REPOSITORY"
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_PRERELEASE: ${{ inputs.prerelease }}
+        run: bash trusted/scripts/publish_release.sh "$RUNNER_TEMP/motorola_nursery.zip"

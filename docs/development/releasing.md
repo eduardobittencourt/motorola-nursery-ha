@@ -6,8 +6,11 @@ Users can find Motorola Nursery in HACS without adding a custom repository.
 Keep HACS and Hassfest validation enabled without ignored checks.
 
 For a release, update `custom_components/motorola_nursery/manifest.json` and
-`CHANGELOG.md`, let validation pass for the release commit, then publish a GitHub
-release with a matching version tag (`vX.Y.Z` for manifest version `X.Y.Z`).
+`CHANGELOG.md`, let validation pass for the release commit, then push the matching
+version tag (`vX.Y.Z` for manifest version `X.Y.Z`). Run **Publish integration
+release** from the `main` branch in Actions, enter the existing tag and choose
+whether it is a prerelease. The workflow builds the ZIP, creates a draft release,
+attaches the package, and publishes only after the upload succeeds.
 [HACS uses published releases](https://www.hacs.xyz/docs/publish/start/#versions);
 pushing a tag alone does not publish an update. Normal releases do not require
 another catalog submission.
@@ -35,11 +38,17 @@ transcripts and captures outside the public documentation.
 
 ## HACS release asset and download count
 
-`hacs.json` selects `motorola_nursery.zip` from each new release. The
-**Package integration release** workflow checks that the tag matches the manifest
-and attaches a ZIP containing only the integration files, with `manifest.json`
-at the archive root. It does not create tags/releases or replace existing assets.
-Wait for the packaging job to finish before announcing the release.
+`hacs.json` selects `motorola_nursery.zip` from each new release. The manual
+**Publish integration release** workflow checks that the existing tag matches
+the manifest and builds a ZIP containing only the integration files, with
+`manifest.json` at the archive root. Use this workflow instead of publishing an
+asset-less release through the GitHub release editor. It never creates tags,
+replaces assets or modifies an existing release.
+
+If package creation fails, no release is created. If upload fails, the release
+stays a draft and is not offered by HACS. Inspect and remove only that unpublished
+draft before retrying the workflow; existing releases/assets are never overwritten.
+Do not manually publish the draft while the workflow is running.
 
 HACS derives the displayed download count from the selected release asset's
 GitHub download counter. This is an asset-download count, not an installation

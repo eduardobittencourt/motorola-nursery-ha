@@ -12,6 +12,7 @@ from scripts import fork_sonar as scan
 
 SHA = "a" * 40
 REPO = "example/nursery"
+EXPECTED_JOBS = {"Tests (current)", "Tests (minimum)", "HACS", "Hassfest"}
 XML = (
     b"<coverage><sources><source>.</source></sources><packages><package>"
     b'<classes><class filename="scripts/example.py"/></classes>'
@@ -103,7 +104,7 @@ def test_prepare_queues_only_exact_successful_fork_run(context, monkeypatch):
             return iter([context["pr"]])
         if key == "jobs":
             return iter(
-                {"name": name, "conclusion": "success"} for name in scan.REQUIRED_JOBS
+                {"name": name, "conclusion": "success"} for name in EXPECTED_JOBS
             )
         return iter([{"id": 55, "name": "coverage-python", "expired": False}])
 
@@ -347,7 +348,7 @@ def test_prepare_does_not_queue_incomplete_or_stale_validation(
         if "/pulls?" in path:
             return iter([] if problem == "head" else [context["pr"]])
         if key == "jobs":
-            names = {"HACS"} if problem == "jobs" else scan.REQUIRED_JOBS
+            names = {"HACS"} if problem == "jobs" else EXPECTED_JOBS
             return iter({"name": name, "conclusion": "success"} for name in names)
         return iter(
             []
@@ -473,3 +474,27 @@ def test_valid_release_versions_remain_accepted_in_scan(
         "sonar.projectVersion=" + version
         in (root / "sonar-project.properties").read_text()
     )
+
+
+@pytest.mark.parametrize("missing", sorted(EXPECTED_JOBS))
+def test_each_required_validation_job_is_independently_required(
+    context, monkeypatch, missing
+):
+    """Removing either HA job or another required validator cannot pass preparation."""
+
+    def pages(path, key=None):
+        if "/pulls?" in path:
+            return iter([context["pr"]])
+        if key == "jobs":
+            return iter(
+                {"name": name, "conclusion": "success"}
+                for name in EXPECTED_JOBS - {missing}
+            )
+        return iter([{"id": 55, "name": "coverage-python", "expired": False}])
+
+    api = Mock()
+    monkeypatch.setattr(scan, "pages", pages)
+    monkeypatch.setattr(scan, "api", api)
+    with pytest.raises(scan.ReviewError, match="validation jobs"):
+        scan.prepare()
+    api.assert_not_called()
