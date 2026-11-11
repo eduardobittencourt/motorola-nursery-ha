@@ -32,3 +32,24 @@ setting controls only in an agreed testing window and restore their values.
 Use synthetic tests for destructive failures, invalid credentials and outages.
 Report model, firmware and limits in the PR or release notes; keep deployment
 transcripts and captures outside the public documentation.
+
+## HACS release asset and download count
+
+`hacs.json` selects `motorola_nursery.zip` from each new release. The
+**Package integration release** workflow checks that the tag matches the manifest
+and attaches a ZIP containing only the integration files, with `manifest.json`
+at the archive root. It does not create tags/releases or replace existing assets.
+Wait for the packaging job to finish before announcing the release.
+
+HACS derives the displayed download count from the selected release asset's
+GitHub download counter. This is an asset-download count, not an installation
+count or a historical total. Older source-only releases do not gain retrospective
+counts; they retain their original HACS manifests and installation behavior.
+The default branch is hidden from the HACS version picker because it has no
+published ZIP asset. Use stable releases for normal installations and the beta
+selector for prereleases. Download source directly for development.
+
+References:
+
+- [HACS integration distribution](https://www.hacs.xyz/docs/publish/integration/)
+- [HACS release-asset counter implementation](https://github.com/hacs/integration/blob/main/custom_components/hacs/repositories/base.py)
