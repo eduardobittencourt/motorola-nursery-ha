@@ -12,6 +12,7 @@ import xml.parsers.expat as XML
 import zipfile
 from pathlib import Path, PurePosixPath
 
+COVERAGE_XML = "coverage.xml"
 MAX_XML = 10 * 1024 * 1024
 REQUIRED_JOBS = {"Tests (current)", "Tests (minimum)", "HACS", "Hassfest"}
 ENVIRONMENT = "sonar-fork-analysis"
@@ -19,6 +20,40 @@ ENVIRONMENT = "sonar-fork-analysis"
 
 class ReviewError(Exception):
     """Reject an unapproved, stale or unsafe analysis input."""
+
+
+def api_path(path: str) -> str:
+    """Allow only explicit repository API routes and canonical pagination queries."""
+    parsed = urllib.parse.urlsplit(path)
+    prefix = repo_path() + "/"
+    if (
+        parsed.scheme
+        or parsed.netloc
+        or parsed.fragment
+        or not parsed.path.startswith(prefix)
+    ):
+        raise ReviewError("Unexpected repository API route")
+    route = parsed.path[len(prefix) :]
+    if not re.fullmatch(
+        r"(?:pulls(?:/\d+)?|actions/runs/\d+/(?:jobs|artifacts)|"
+        r"environments/sonar-fork-analysis|check-runs(?:/\d+)?)",
+        route,
+        re.ASCII,
+    ):
+        raise ReviewError("Unexpected repository API route")
+    query = urllib.parse.parse_qs(parsed.query, strict_parsing=True)
+    for name, values in query.items():
+        if len(values) != 1 or name not in {"state", "page", "per_page"}:
+            raise ReviewError("Unexpected API query")
+        if name == "state":
+            if values != ["open"]:
+                raise ReviewError("Unexpected PR state query")
+        elif not re.fullmatch(r"\d{1,3}", values[0], re.ASCII):
+            raise ReviewError("Unexpected pagination query")
+    encoded = "/".join(
+        urllib.parse.quote(part, safe="") for part in parsed.path.split("/")
+    )
+    return encoded + ("?" + urllib.parse.urlencode(query, doseq=True) if query else "")
 
 
 def api(path: str, method: str = "GET", data=None):
@@ -41,7 +76,7 @@ def api(path: str, method: str = "GET", data=None):
     try:
         connection.request(
             method,
-            path,
+            api_path(path),
             body=json.dumps(data) if data is not None else None,
             headers={
                 "Authorization": "Bearer " + os.environ["GH_TOKEN"],
@@ -134,6 +169,7 @@ def prepare() -> None:
         raise ReviewError("Only successful fork pull-request validation is eligible")
     base = repo_path()
     sha = run["head_sha"]
+    run_id = int(run["id"])
     prs = [
         pr
         for pr in pages(base + "/pulls?state=open")
@@ -147,11 +183,11 @@ def prepare() -> None:
     require_head(pr, sha)
     if pr["base"]["ref"] != event["repository"]["default_branch"]:
         raise ReviewError("Fork analysis supports the default target branch only")
-    jobs = list(pages(f"{base}/actions/runs/{run['id']}/jobs", "jobs"))
+    jobs = list(pages(f"{base}/actions/runs/{run_id}/jobs", "jobs"))
     passed = {job["name"] for job in jobs if job["conclusion"] == "success"}
     if not passed >= REQUIRED_JOBS:
         raise ReviewError("Required validation jobs did not all succeed")
-    artifacts = list(pages(f"{base}/actions/runs/{run['id']}/artifacts", "artifacts"))
+    artifacts = list(pages(f"{base}/actions/runs/{run_id}/artifacts", "artifacts"))
     coverage = [a for a in artifacts if a["name"] == "coverage-python"]
     if len(coverage) != 1 or coverage[0]["expired"]:
         raise ReviewError("Current-HA coverage artifact missing or expired")
@@ -189,6 +225,17 @@ def prepare() -> None:
         )
 
 
+def source_file(root: Path, path: Path) -> tuple[str, int] | None:
+    """Reject links and special files before the scanner can access their content."""
+    if path.is_symlink() or not path.resolve().is_relative_to(root.resolve()):
+        raise ReviewError("Source link or path escapes checkout")
+    if path.is_dir():
+        return None
+    if not path.is_file():
+        raise ReviewError("Source is not a regular file")
+    return path.relative_to(root).as_posix(), path.stat().st_size
+
+
 def safe_sources(root: Path) -> set[str]:
     """Reject links, submodules and oversized sources before scanner access."""
     files = set()
@@ -199,36 +246,37 @@ def safe_sources(root: Path) -> set[str]:
         if Path(directory) == root and ".git" in directories:
             directories.remove(".git")
         for name in directories + names:
-            path = Path(directory) / name
-            if path.is_symlink() or not path.resolve().is_relative_to(root.resolve()):
-                raise ReviewError("Source link or path escapes checkout")
-            if path.is_dir():
+            item = source_file(root, Path(directory) / name)
+            if item is None:
                 continue
-            if not path.is_file():
-                raise ReviewError("Source is not a regular file")
-            total += path.stat().st_size
+            name, size = item
+            total += size
             if total > 100 * 1024 * 1024:
                 raise ReviewError("Source size limit exceeded")
-            files.add(path.relative_to(root).as_posix())
+            files.add(name)
     return files
 
 
-def coverage_xml(archive: Path, tracked: set[str]) -> bytes:
-    """Accept only bounded XML and repository-relative tracked coverage paths."""
+def read_coverage(archive: Path) -> bytes:
+    """Read one bounded XML member without extracting or loading a SQLite file."""
     with zipfile.ZipFile(archive) as package:
         names = package.namelist()
-        if names.count("coverage.xml") != 1 or len(names) > 3:
+        if names.count(COVERAGE_XML) != 1 or len(names) > 3:
             raise ReviewError("Unexpected coverage archive")
-        if set(names) - {"coverage.xml", ".coverage.python"}:
+        if set(names) - {COVERAGE_XML, ".coverage.python"}:
             raise ReviewError("Unexpected coverage archive member")
-        info = package.getinfo("coverage.xml")
+        info = package.getinfo(COVERAGE_XML)
         if info.file_size > MAX_XML or stat.S_ISLNK(info.external_attr >> 16):
             raise ReviewError("Invalid coverage member")
         with package.open(info) as stream:
             raw = stream.read(MAX_XML + 1)
     if len(raw) > MAX_XML or b"<!DOCTYPE" in raw.upper() or b"<!ENTITY" in raw.upper():
         raise ReviewError("Unsafe coverage XML")
-    # Expat never receives DTDs or entity declarations. UTF-8 is mandatory.
+    return raw
+
+
+def xml_paths(raw: bytes) -> tuple[list[str], list[str]]:
+    """Parse coverage paths with DTD and entity handlers that reject declarations."""
     parser = XML.ParserCreate()
     parser.SetParamEntityParsing(XML.XML_PARAM_ENTITY_PARSING_NEVER)
     sources = []
@@ -260,16 +308,24 @@ def coverage_xml(archive: Path, tracked: set[str]) -> bytes:
     parser.Parse(raw.decode("utf-8"), True)
     if not sources or not filenames:
         raise ReviewError("Coverage source paths or classes missing")
-    prefixes = []
-    for source in sources:
-        path = PurePosixPath(source or ".")
-        if path.is_absolute() or ".." in path.parts or "\\" in str(path):
-            raise ReviewError("Coverage source escapes repository")
-        prefixes.append(path)
+    return sources, filenames
+
+
+def relative_path(value: str) -> PurePosixPath:
+    """Permit only repository-relative coverage names."""
+    path = PurePosixPath(value or ".")
+    if path.is_absolute() or ".." in path.parts or "\\" in value:
+        raise ReviewError("Coverage path escapes repository")
+    return path
+
+
+def coverage_xml(archive: Path, tracked: set[str]) -> bytes:
+    """Accept bounded XML only when all coverage paths resolve to tracked source."""
+    raw = read_coverage(archive)
+    sources, filenames = xml_paths(raw)
+    prefixes = [relative_path(source) for source in sources]
     for name in filenames:
-        path = PurePosixPath(name)
-        if path.is_absolute() or ".." in path.parts or "\\" in name:
-            raise ReviewError("Coverage filename escapes repository")
+        path = relative_path(name)
         if not any(str(prefix / path) in tracked for prefix in prefixes):
             raise ReviewError("Coverage references an untracked file")
     return raw
@@ -307,7 +363,9 @@ def stage() -> None:
     version = json.loads(
         (root / "custom_components/motorola_nursery/manifest.json").read_text()
     )["version"]
-    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+[A-Za-z0-9.+_-]*", version):
+    if len(version) > 64 or not re.fullmatch(
+        r"\d++\.\d++\.\d++[A-Za-z0-9.+_-]*+", version, re.ASCII
+    ):
         raise ReviewError("Invalid integration version")
     settings = {
         "sonar.pullrequest.key": str(pr["number"]),
@@ -321,7 +379,7 @@ def stage() -> None:
         key + "=" + properties_value(value) for key, value in settings.items()
     )
     (root / "sonar-project.properties").write_text(config + "\n")
-    (root / "coverage.xml").write_bytes(xml)
+    (root / COVERAGE_XML).write_bytes(xml)
     api(
         f"{base}/check-runs/{int(os.environ['CHECK_ID'])}",
         "PATCH",

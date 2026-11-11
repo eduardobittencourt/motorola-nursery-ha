@@ -248,8 +248,9 @@ def test_source_links_and_submodule_configuration_are_rejected(
 )
 def test_untrusted_xml_cannot_escape_source_or_expand_entities(tmp_path, raw):
     """Coverage paths and XML declarations cannot read arbitrary runner files."""
+    report = archive(tmp_path, raw)
     with pytest.raises((scan.ReviewError, UnicodeError)):
-        scan.coverage_xml(archive(tmp_path, raw), {"scripts/example.py"})
+        scan.coverage_xml(report, {"scripts/example.py"})
 
 
 @pytest.mark.parametrize(
@@ -257,17 +258,17 @@ def test_untrusted_xml_cannot_escape_source_or_expand_entities(tmp_path, raw):
 )
 def test_coverage_zip_never_extracts_paths_or_symlinks(tmp_path, member, link):
     """Only the expected regular XML member is read from the archive."""
+    report = archive(tmp_path, member=member, symlink=link)
     with pytest.raises(scan.ReviewError):
-        scan.coverage_xml(
-            archive(tmp_path, member=member, symlink=link), {"scripts/example.py"}
-        )
+        scan.coverage_xml(report, {"scripts/example.py"})
 
 
 def test_xml_size_is_bounded_before_decompression(tmp_path, monkeypatch):
     """A compressed oversized report is rejected before parsing."""
     monkeypatch.setattr(scan, "MAX_XML", 10)
+    report = archive(tmp_path)
     with pytest.raises(scan.ReviewError, match="Invalid coverage"):
-        scan.coverage_xml(archive(tmp_path), {"scripts/example.py"})
+        scan.coverage_xml(report, {"scripts/example.py"})
 
 
 @pytest.mark.parametrize(
@@ -413,3 +414,62 @@ def test_coverage_supports_relative_source_prefixes(tmp_path):
         b"scripts/example.py", b"example.py"
     )
     assert scan.coverage_xml(archive(tmp_path, raw), {"scripts/example.py"}) == raw
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/repos/example/nursery/actions/runs/../../secrets/jobs",
+        "/repos/example/nursery/actions/runs/%2e%2e/jobs",
+        "/repos/other/repository/pulls/17",
+        "/repos/example/nursery/pulls/17#ignored",
+        "/repos/example/nursery/pulls?state=closed",
+        "/repos/example/nursery/pulls?per_page=100&evil=1",
+        "/repos/example/nursery/pulls?per_page=100&per_page=10",
+        "/repos/example/nursery/pulls?page=../secrets",
+        "https://invalid.example/repos/example/nursery/pulls/17",
+        "/repos/example/nursery/environments/other-environment",
+    ],
+)
+def test_api_paths_cannot_traverse_or_change_resources(context, monkeypatch, path):
+    """Workflow metadata cannot select a different API endpoint with our token."""
+    connection = Mock()
+    monkeypatch.setattr(
+        scan.http.client, "HTTPSConnection", Mock(return_value=connection)
+    )
+    with pytest.raises(scan.ReviewError):
+        scan.api(path)
+    connection.request.assert_not_called()
+
+
+def test_api_canonicalizes_only_allowlisted_pagination(context):
+    """Expected API paths remain usable with validated pagination values."""
+    path = "/repos/example/nursery/actions/runs/12/artifacts?per_page=100&page=2"
+    assert scan.api_path(path) == path
+
+
+@pytest.mark.parametrize("version", ["0.8.0", "0.9.0b6", "0.8.0+test"])
+def test_valid_release_versions_remain_accepted_in_scan(
+    context, monkeypatch, tmp_path, version
+):
+    """Version validation stays ASCII and accepts ordinary stable/beta metadata."""
+    root = candidate(tmp_path)
+    (root / "custom_components/motorola_nursery/manifest.json").write_text(
+        json.dumps({"version": version})
+    )
+    monkeypatch.setenv("SOURCE_DIR", str(root))
+    monkeypatch.setenv("COVERAGE_ARCHIVE", str(archive(tmp_path)))
+    monkeypatch.setattr(
+        scan,
+        "api",
+        Mock(
+            side_effect=lambda path, *_args: (
+                context["environment"] if "/environments/" in path else context["pr"]
+            )
+        ),
+    )
+    scan.stage()
+    assert (
+        "sonar.projectVersion=" + version
+        in (root / "sonar-project.properties").read_text()
+    )

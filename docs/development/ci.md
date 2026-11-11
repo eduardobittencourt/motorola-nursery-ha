@@ -80,7 +80,9 @@ results are checked once more before the original PR check is completed.
 
 The privileged job treats the contribution as source data only. It does not
 install its dependencies, import its Python modules, run its tests, execute its
-scripts or restore its caches. The source checkout has no persisted credentials.
+scripts or restore its caches. Sources are fetched anonymously with hooks, filesystem monitors and LFS
+filters disabled before materializing tracked files. No checkout action receives
+a fork ref, and the source repository has no credentials.
 The scanner uses `sonar-project.properties` from the trusted default branch,
 explicit PR metadata and the approved SHA, overwriting any fork-supplied scanner
 settings. Changes to that configuration require separate maintainer review and
