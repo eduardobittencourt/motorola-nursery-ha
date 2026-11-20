@@ -1,5 +1,9 @@
 # Configuration
 
+The initial menu offers account setup or experimental
+[local QR pairing](local-pairing.md). The latter generates credentials locally
+and requires explicit LAN DNS/network setup; it does not use a Motorola account.
+
 [Documentation index](../README.md)
 
 ## Account setup
@@ -35,6 +39,9 @@ the replacement is saved in the config entry before fetching devices.
 A rejected session starts Home Assistant reauthentication. Sending another
 email code always requires submitting the email form. Incoming LAN mode disables
 automatic account renewal; credentials can be refreshed manually by account setup.
+
+Locally QR-paired entries also provide **Reconfigure → Change Wi-Fi**, preserving
+the entry and keys; see [local pairing](local-pairing.md#change-wi-fi-without-replacing-the-entry).
 
 For optional incoming LAN readings, see [local readings](local-readings.md).
 For older entity layouts, see [migration notes](migrations.md).

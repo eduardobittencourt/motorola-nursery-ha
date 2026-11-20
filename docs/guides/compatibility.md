@@ -28,14 +28,44 @@ spatial-zone exclusion are not established by successful setting writes.
 
 ## Network and account limits
 
+Beta [local QR pairing](local-pairing.md) has been physically validated on one
+VM65CONNECT with fresh HA-generated credentials, local readings and H.264/AAC.
+A camera cold boot with WAN blocked also recovered when the network supplied a
+local response to its public-IP connectivity probe. This remains a routing-assisted
+result, not a guarantee of offline startup on an ordinary network.
+
+Successful offline startup does not guarantee recovery after reloading the
+integration. Incoming control reconnection remains experimental; video may
+continue while readings are unavailable.
+
+On an ordinary LAN without the routing workaround, WAN loss can interrupt
+locally paired VM65CONNECT readings while video and audio continue initially.
+A cold boot can leave video unavailable until external connectivity returns.
+Local QR pairing does not guarantee continuous offline readings or startup.
+
 Local video requires camera TCP port 77 and a manually supplied reachable
 address. Address discovery is not implemented. Default telemetry and detections
 use the cloud independently of video.
 
 Experimental incoming LAN readings support the same allowlisted controls and
 lullabies, with router configuration. WAN-blocked readings and motion have been
-exercised on VM65CONNECT; offline sound, cold boot and prolonged offline operation
-are not established. Local mode has no automatic account renewal or cloud fallback.
+exercised on an already initialized VM65CONNECT. This does not establish
+independent startup or network recovery. The tested firmware can repeat DHCP
+discovery when external reachability probes fail, interrupting local media even
+though the LAN remains available. Its initialization also uses external services
+beyond the incoming LAN connection.
+
+Experimental network emulation has recovered local video, audio and readings
+after offline startup, but the integration does not provide or manage those
+additional services. A supported standalone replacement and prolonged offline
+reliability are not established. These observations do not establish the
+behavior of other models or firmware.
+
+Offline cold boot is not guaranteed, and a static DNS override has not been
+demonstrated as a workaround. The incoming LAN redirect covers the readings and
+control connection, not every service the camera may need during startup or
+recovery. Offline sound and prolonged offline operation remain unverified.
+Local mode has no automatic account renewal or cloud fallback.
 
 Recovery after real credential changes, long-term expiry, account sharing,
 concurrent phone sessions, multiple HA instances and other regions remain

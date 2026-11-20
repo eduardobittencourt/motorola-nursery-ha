@@ -17,9 +17,16 @@ from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .auth import async_refresh_credentials, credentials_from_data
+from .bootstrap import LocalClockServer, LocalHttpDnsServer
 from .bridge import RtspBridge
 from .cloud import AuthenticationError, CloudError
-from .const import CONF_LOCAL_CONTROL, CONF_SESSION, DOMAIN, PLATFORMS
+from .const import (
+    CONF_LOCAL_CONTROL,
+    CONF_LOCAL_PAIRING,
+    CONF_SESSION,
+    DOMAIN,
+    PLATFORMS,
+)
 from .coordinator import MotorolaTelemetryCoordinator
 from .entity import async_remove_setting_mirrors
 from .events import MotorolaEventManager
@@ -58,6 +65,8 @@ class RuntimeData:
     telemetry_task: asyncio.Task[None] | None = None
     events: MotorolaEventManager | None = None
     local_server: LocalControlServer | None = None
+    local_clock: LocalClockServer | None = None
+    local_httpdns: LocalHttpDnsServer | None = None
 
     async def async_prepare_stream(self, *, force: bool = False) -> None:
         """Probe local video and recover account credentials with bounded retries."""
@@ -128,6 +137,10 @@ class RuntimeData:
             await self.events.stop()
         if self.local_server is not None:
             await self.local_server.unregister(self.entry.entry_id)
+        if self.local_clock is not None:
+            await self.local_clock.unregister(self.entry.entry_id)
+        if self.local_httpdns is not None:
+            await self.local_httpdns.unregister(self.entry.entry_id)
         if self.recovery_task is not None:
             self.recovery_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -144,6 +157,25 @@ def credentials_from_entry(entry: ConfigEntry) -> Credentials:
 
 async def _async_setup_telemetry(hass, entry, runtime):
     """Configure exactly one control transport without delaying local video."""
+    if entry.data.get(CONF_LOCAL_PAIRING, False):
+        clock = hass.data.setdefault(DOMAIN, {}).setdefault(
+            "local_clock_server", LocalClockServer()
+        )
+        runtime.local_clock = clock
+        try:
+            await clock.register(entry.entry_id, entry.data["host"])
+        except OSError:
+            raise ConfigEntryNotReady("Local clock listener unavailable") from None
+        httpdns = hass.data.setdefault(DOMAIN, {}).setdefault(
+            "local_httpdns_server", LocalHttpDnsServer()
+        )
+        runtime.local_httpdns = httpdns
+        try:
+            await httpdns.register(
+                entry.entry_id, entry.data["host"], entry.data["local_server"]
+            )
+        except OSError:
+            raise ConfigEntryNotReady("Local HTTP-DNS listener unavailable") from None
     if entry.data.get(CONF_LOCAL_CONTROL, False):
         server = hass.data.setdefault(DOMAIN, {}).setdefault(
             "local_control_server", LocalControlServer()

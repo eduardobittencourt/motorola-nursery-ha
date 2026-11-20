@@ -135,7 +135,14 @@ async def test_slow_cloud_does_not_block_video_and_is_cancelled_on_unload(
         relay.stop.assert_awaited_once()
 
 
-async def test_local_entry_uses_no_cloud_and_keeps_entity_ids(hass, socket_enabled):
+@pytest.mark.parametrize("paired_locally", [False, True])
+async def test_local_entry_uses_no_cloud_and_keeps_entity_ids(
+    hass, socket_enabled, paired_locally
+):
+    from custom_components.motorola_nursery.bootstrap import (
+        LocalClockServer,
+        LocalHttpDnsServer,
+    )
     from custom_components.motorola_nursery.local import LocalControlServer
     from tests.test_local import CAPS, connected
 
@@ -151,10 +158,14 @@ async def test_local_entry_uses_no_cloud_and_keeps_entity_ids(hass, socket_enabl
             "rtsp_password": "password",
             "access_token": "access",
             "local_control": True,
+            "local_pairing": paired_locally,
+            "local_server": "192.168.12.3",
         },
     )
     entry.add_to_hass(hass)
     server = LocalControlServer(0)
+    clock = LocalClockServer(0)
+    httpdns = LocalHttpDnsServer(0)
     bridge = Mock(start=AsyncMock(), stop=AsyncMock(), port=12345, active_connections=0)
     relay = Mock(
         start=AsyncMock(),
@@ -175,6 +186,13 @@ async def test_local_entry_uses_no_cloud_and_keeps_entity_ids(hass, socket_enabl
         patch(
             "custom_components.motorola_nursery.LocalControlServer", return_value=server
         ),
+        patch(
+            "custom_components.motorola_nursery.LocalClockServer", return_value=clock
+        ),
+        patch(
+            "custom_components.motorola_nursery.LocalHttpDnsServer",
+            return_value=httpdns,
+        ),
         patch("custom_components.motorola_nursery.TelemetryClient") as cloud_client,
         patch("custom_components.motorola_nursery.async_refresh_credentials") as renew,
         patch(
@@ -184,6 +202,11 @@ async def test_local_entry_uses_no_cloud_and_keeps_entity_ids(hass, socket_enabl
     ):
         try:
             assert await hass.config_entries.async_setup(entry.entry_id)
+            assert (clock.server is not None) == paired_locally
+            assert (httpdns.server is not None) == paired_locally
+            if paired_locally:
+                assert clock.peers == {entry.entry_id: "192.0.2.10"}
+                assert httpdns.peers == {entry.entry_id: ("192.0.2.10", "192.168.12.3")}
             connection = await connected(server.port)
 
             async def respond():
@@ -213,6 +236,8 @@ async def test_local_entry_uses_no_cloud_and_keeps_entity_ids(hass, socket_enabl
             assert await hass.config_entries.async_unload(entry.entry_id)
             await hass.async_block_till_done()
             assert not server._tasks
+            assert clock.server is None and not clock.peers and not clock.tasks
+            assert httpdns.server is None and not httpdns.peers and not httpdns.tasks
         finally:
             if task:
                 task.cancel()
@@ -225,3 +250,58 @@ async def test_local_entry_uses_no_cloud_and_keeps_entity_ids(hass, socket_enabl
                 await connection.writer.wait_closed()
             if server._entries:
                 await server.unregister(entry.entry_id)
+
+
+async def test_local_httpdns_bind_failure_closes_partial_runtime(hass, socket_enabled):
+    from custom_components.motorola_nursery.bootstrap import (
+        LocalClockServer,
+        LocalHttpDnsServer,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="synthetic-device",
+        data={
+            "host": "192.0.2.10",
+            "sid_user_id": "123456",
+            "sid_device": "synthetic-device",
+            "magic_token": "synthetic-token",
+            "rtsp_username": "user",
+            "rtsp_password": "password",
+            "access_token": "access",
+            "local_control": True,
+            "local_pairing": True,
+            "local_server": "192.168.12.3",
+        },
+    )
+    entry.add_to_hass(hass)
+    clock, httpdns = LocalClockServer(0), LocalHttpDnsServer(0)
+    bridge = Mock(start=AsyncMock(), stop=AsyncMock(), port=12345)
+    relay = Mock(start=AsyncMock(), stop=AsyncMock())
+    with (
+        patch(
+            "homeassistant.components.ffmpeg.async_setup", AsyncMock(return_value=True)
+        ),
+        patch(
+            "homeassistant.components.stream.async_setup", AsyncMock(return_value=True)
+        ),
+        patch("custom_components.motorola_nursery.RtspBridge", return_value=bridge),
+        patch("custom_components.motorola_nursery.FfmpegRelay", return_value=relay),
+        patch(
+            "custom_components.motorola_nursery.LocalClockServer", return_value=clock
+        ),
+        patch(
+            "custom_components.motorola_nursery.LocalHttpDnsServer",
+            return_value=httpdns,
+        ),
+        patch.object(httpdns, "start", AsyncMock(side_effect=OSError)),
+        patch(
+            "custom_components.motorola_nursery.get_ffmpeg_manager",
+            return_value=Mock(binary="ffmpeg"),
+        ),
+    ):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert clock.server is None and not clock.peers
+    assert httpdns.server is None and not httpdns.peers
+    bridge.stop.assert_awaited_once()
+    relay.stop.assert_awaited_once()

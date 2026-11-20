@@ -26,3 +26,5 @@ CONF_EMAIL = "email"
 CONF_CODE = "code"
 CONF_DEVICE = "device"
 CONF_LOCAL_CONTROL = "local_control"
+
+CONF_LOCAL_PAIRING = "local_pairing"

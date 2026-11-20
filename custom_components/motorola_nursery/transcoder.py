@@ -7,6 +7,8 @@ import contextlib
 import secrets
 from collections.abc import Callable
 
+MEDIA_IDLE_TIMEOUT = 30
+
 
 class FfmpegRelay:
     """Serve an FFmpeg MPEG-TS stream on a private loopback endpoint."""
@@ -80,6 +82,7 @@ class FfmpegRelay:
             raise RuntimeError("Relay connection has no owning task")
         self._tasks.add(task)
         process: asyncio.subprocess.Process | None = None
+        streaming_tasks: set[asyncio.Task] = set()
         try:
             if not await self._valid_request(reader):
                 writer.write(
@@ -137,18 +140,41 @@ class FfmpegRelay:
             )
             await writer.drain()
 
-            while data := await process.stdout.read(64 * 1024):
-                writer.write(data)
-                await writer.drain()
+            async def stream_output(
+                relay_process: asyncio.subprocess.Process, output: asyncio.StreamReader
+            ) -> None:
+                while True:
+                    async with asyncio.timeout(MEDIA_IDLE_TIMEOUT):
+                        data = await output.read(64 * 1024)
+                        if not data:
+                            break
+                        writer.write(data)
+                        await writer.drain()
+                async with asyncio.timeout(MEDIA_IDLE_TIMEOUT):
+                    return_code = await relay_process.wait()
+                if return_code != 0:
+                    self._on_process_error(return_code)
 
-            return_code = await process.wait()
-            if return_code != 0:
-                self._on_process_error(return_code)
+            # The private GET endpoint has no request body. Watch its reader so
+            # a closed consumer releases FFmpeg even when media output stalls.
+            streaming_tasks = {
+                asyncio.create_task(stream_output(process, process.stdout)),
+                asyncio.create_task(reader.read(1)),
+            }
+            done, _ = await asyncio.wait(
+                streaming_tasks, return_when=asyncio.FIRST_COMPLETED
+            )
+            for completed in done:
+                completed.result()
         except asyncio.CancelledError:
             raise
         except OSError:
             pass
         finally:
+            for streaming_task in streaming_tasks:
+                streaming_task.cancel()
+            if streaming_tasks:
+                await asyncio.gather(*streaming_tasks, return_exceptions=True)
             if process is not None:
                 await self._stop_process(process)
             writer.close()

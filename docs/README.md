@@ -11,6 +11,7 @@ These guides describe the supported implementation in this checkout.
 - [Entities and controls](guides/entities.md): available entities and capability rules.
 - [Troubleshooting](guides/troubleshooting.md): common failures and safe reports.
 - [Migration notes](guides/migrations.md): procedures still needed by older installations.
+- [Local QR pairing (beta)](guides/local-pairing.md): experimental HA-managed enrollment and clock.
 - [Incoming LAN readings](guides/local-readings.md): optional router-dependent mode.
 
 ## Technical reference

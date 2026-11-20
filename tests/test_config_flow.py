@@ -60,6 +60,9 @@ async def test_first_setup_failure_has_safe_logs_and_version_context(
             DOMAIN, context={"source": "user"}
         )
         result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "account"}
+        )
+        result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"email": "private@example.test"}
         )
     assert result["errors"] == {"base": ui_error}
@@ -153,10 +156,10 @@ async def test_full_ui_flow(hass, model, sid_device):
             AsyncMock(side_effect=connect),
         ),
     ):
-        result = await flow.async_step_user()
-        assert result["step_id"] == "user"
+        result = await flow.async_step_account()
+        assert result["step_id"] == "account"
         client.request_code.assert_not_called()
-        result = await flow.async_step_user({"email": "owner@example.test"})
+        result = await flow.async_step_account({"email": "owner@example.test"})
         assert result["step_id"] == "code"
         result = await flow.async_step_code({"code": "123456"})
         assert result["step_id"] == "device"
@@ -180,7 +183,7 @@ async def test_invalid_code_retry_does_not_send_new_email(hass):
         "custom_components.motorola_nursery.config_flow.async_client",
         AsyncMock(return_value=client),
     ):
-        await flow.async_step_user({"email": "owner@example.test"})
+        await flow.async_step_account({"email": "owner@example.test"})
         result = await flow.async_step_code({"code": "000000"})
         assert result["errors"] == {"code": "invalid_code"}
         assert "default" not in str(result["data_schema"])
@@ -212,7 +215,7 @@ async def test_reconfigure_preserves_entry_and_id(hass):
         patch.object(hass.config_entries, "async_schedule_reload"),
     ):
         assert (await flow.async_step_reconfigure())["type"] == FlowResultType.MENU
-        await flow.async_step_user({"email": "owner@example.test"})
+        await flow.async_step_account({"email": "owner@example.test"})
         assert (await flow.async_step_code({"code": "123456"}))["step_id"] == "host"
         result = await flow.async_step_host({"host": "192.0.2.11"})
     assert result["reason"] == "reconfigure_successful"
@@ -234,8 +237,8 @@ async def test_wrong_account_does_not_modify_entry(hass):
         "custom_components.motorola_nursery.config_flow.async_client",
         AsyncMock(return_value=client),
     ):
-        assert (await flow.async_step_reauth(entry.data))["step_id"] == "user"
-        await flow.async_step_user({"email": "other@example.test"})
+        assert (await flow.async_step_reauth(entry.data))["step_id"] == "account"
+        await flow.async_step_account({"email": "other@example.test"})
         result = await flow.async_step_code({"code": "123456"})
     assert result["reason"] == "wrong_account"
     assert entry.data == original
@@ -253,7 +256,7 @@ async def test_device_list_retry_does_not_replay_code(hass):
         "custom_components.motorola_nursery.config_flow.async_client",
         AsyncMock(side_effect=[first, second]),
     ):
-        await flow.async_step_user({"email": "owner@example.test"})
+        await flow.async_step_account({"email": "owner@example.test"})
         result = await flow.async_step_code({"code": "123456"})
         assert result["step_id"] == "devices"
         result = await flow.async_step_devices({})
@@ -279,6 +282,9 @@ async def test_real_ha_flow_manager_and_abort_cleanup(hass):
         )
         assert result["step_id"] == "user"
         result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"next_step_id": "account"}
+        )
+        result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"email": "owner@example.test"}
         )
         assert result["step_id"] == "code"
@@ -302,7 +308,7 @@ async def test_invalid_device_response_keeps_authenticated_retry_without_new_otp
         "custom_components.motorola_nursery.config_flow.async_client",
         AsyncMock(side_effect=[first, second]),
     ):
-        await flow.async_step_user({"email": "private@example.test"})
+        await flow.async_step_account({"email": "private@example.test"})
         result = await flow.async_step_code({"code": "654321"})
         assert result["step_id"] == "devices"
         assert result["errors"] == {"base": "invalid_device_response"}
@@ -349,3 +355,11 @@ async def test_local_control_reconfigure_preserves_account_and_identity(hass):
     assert result["reason"] == "reconfigure_successful"
     assert dict(entry.data) == {**before, "local_control": True}
     assert entry.unique_id == DEVICE.sid_device
+
+
+async def test_local_control_option_schema_retains_legacy_form(hass):
+    entry = MockConfigEntry(domain=DOMAIN, data={"local_control": True})
+    entry.add_to_hass(hass)
+    flow = make_flow(hass, config_entries.SOURCE_RECONFIGURE, entry)
+    result = await flow.async_step_local_control()
+    assert result["data_schema"]({}) == {"local_control": True}

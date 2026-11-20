@@ -166,6 +166,10 @@ class LocalControlServer:
             self._entries[identifier] = registration
             return registration
 
+    def get_registration(self, identifier: str) -> Registration | None:
+        """Borrow an existing registration without adding a duplicate identity."""
+        return self._entries.get(identifier)
+
     async def unregister(self, identifier: str) -> None:
         async with self._lock:
             registration = self._entries.pop(identifier, None)

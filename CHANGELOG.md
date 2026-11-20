@@ -1,6 +1,68 @@
 # Changelog
 
-## Unreleased
+## 0.9.0b6 — beta
+
+- Serve bounded SDK HTTP-DNS on TCP40280 for locally paired cameras, resolving
+  only each camera's configured HA selector without upstream queries.
+- Register the resolver during pairing and runtime, and close it after the last
+  entry or flow releases it. Existing entries and entity IDs remain unchanged.
+- Public resolver traffic still needs external routing to HA; this listener does
+  not configure router interception or guarantee self-contained offline startup.
+
+## 0.9.0b5 — beta
+
+- Verify an existing camera after an address-changing Wi-Fi move using a new
+  authenticated control connection and saved-key video, even when enrollment
+  acknowledgement is absent. Fresh setup still requires enrollment.
+- Reject stale sessions and same-address moves without enrollment confirmation;
+  video failure cannot bypass verification in the reconnect-only path.
+- Add light-theme guidance for camera-readable QR codes and bounded enrollment
+  rejection categories that omit identifiers and payloads.
+
+## 0.9.0b4 — beta
+
+- Add a local-entry Change Wi-Fi flow that reuses the saved camera keys and
+  updates the existing entry after verifying the new address, preserving IDs.
+- Borrow the existing incoming registration during migration to avoid duplicate
+  credential matches; cancellation and expiry leave its live session intact.
+- Require control from the candidate camera address and preserve newer config
+  changes when another reconfiguration happens during pairing.
+- Correct the legacy local-control option schema.
+
+## 0.9.0b3 — beta
+
+- Clear QR payloads from the shared HA form selector on completion, cancellation
+  and expiry, in addition to closing provisional listeners.
+
+## 0.9.0b2 — beta
+
+- Separate the QR enrollment identifier from the six-digit camera owner field.
+- Distinguish enrollment, incoming-control and video verification errors.
+- Offer explicit saving of an authenticated pairing after a video probe failure,
+  so continued media diagnosis does not discard newly provisioned credentials.
+
+## 0.9.0b1 — beta
+
+- Add an experimental VM65CONNECT local pairing flow with a native HA QR,
+  fresh locally generated credentials and no account login or add-on.
+- Bound enrollment to the selected camera address and a ten-minute window;
+  close listeners and discard Wi-Fi data on cancellation or expiry.
+- Serve the startup clock for locally paired entries and close it on unload.
+- Verify incoming control and local video before saving a local entry.
+- Document DNS/routing prerequisites, legacy enrollment security limits and
+  the need to pair again when rolling back to stable.
+- Fresh credentials still require physical-device validation.
+
+### Included playback and protocol improvements
+
+- Reuse the native stream worker for snapshots, wait for a new keyframe and
+  discard buffered results when the worker reports a disconnected stream.
+- Keep the stream worker active during repeated snapshot requests, then allow
+  Home Assistant to release it after the requests stop.
+- Release FFmpeg and its camera tunnel when the stream consumer disconnects or
+  media output stalls, so reconnection does not retain abandoned ingestions.
+- Clarify firmware reachability checks and the limits of offline camera startup
+  and network recovery.
 
 ## 0.8.1 — 2026-11-11
 

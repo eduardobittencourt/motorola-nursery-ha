@@ -2,13 +2,6 @@
   "title": "Motorola Nursery",
   "config": {
     "step": {
-      "user": {
-        "title": "Conectar sua conta Motorola",
-        "description": "Informe o e-mail usado no Motorola Nursery. Vamos solicitar um código de acesso de seis dígitos.",
-        "data": {
-          "email": "E-mail"
-        }
-      },
       "code": {
         "title": "Confirmar o código do e-mail",
         "description": "Digite o código de seis dígitos enviado pela Motorola. Não é necessário informar uma senha.",
@@ -38,7 +31,8 @@
         "menu_options": {
           "user": "Conectar ou autenticar a conta Motorola",
           "change_host": "Alterar o IP da câmera",
-          "local_control": "Usar leituras locais das entidades"
+          "local_control": "Usar leituras locais das entidades",
+          "change_wifi": "Trocar Wi-Fi"
         }
       },
       "change_host": {
@@ -53,6 +47,48 @@
         "data": {
           "local_control": "Usar controle local"
         }
+      },
+      "account": {
+        "title": "Conectar sua conta Motorola",
+        "description": "Informe o e-mail usado no Motorola Nursery. Vamos solicitar um código de acesso de seis dígitos.",
+        "data": {
+          "email": "E-mail"
+        }
+      },
+      "user": {
+        "title": "Adicionar câmera Motorola",
+        "menu_options": {
+          "local_pairing": "Parear localmente pelo HA (beta)",
+          "account": "Usar conta Motorola"
+        }
+      },
+      "local_pairing": {
+        "title": "Pareamento local — beta",
+        "description": "Use uma rede Wi-Fi de 2,4 GHz com reserva de endereço para a câmera. Antes de continuar, configure o DNS descrito no guia de pareamento local. Informe o endereço LAN do HA. O Wi-Fi fica apenas nesta janela de configuração. Não faça reset ainda.",
+        "data": {
+          "ssid": "Nome do Wi-Fi (SSID)",
+          "wifi_password": "Senha do Wi-Fi",
+          "host": "Endereço reservado da câmera",
+          "local_server": "Endereço LAN do Home Assistant"
+        }
+      },
+      "local_scan": {
+        "title": "Mostre o QR à câmera",
+        "description": "Use o tema claro do HA: o QR deve estar preto sobre fundo branco. Coloque a câmera em modo de pareamento pelo botão físico e mostre o QR à lente. Na primeira configuração, aguarde “pairing success”. Ao trocar para um endereço novo, você pode avançar para verificar a conexão mesmo após uma mensagem de falha: o HA exigirá uma nova conexão de controle e vídeo autenticado com as chaves existentes. O QR expira em dez minutos.",
+        "data": {
+          "qr_code": "QR de pareamento",
+          "save_pairing": "Salvar cadastro e continuar a investigar o vídeo"
+        }
+      },
+      "change_wifi": {
+        "title": "Trocar o Wi-Fi da câmera",
+        "description": "Informe a nova rede e o endereço reservado para a câmera nessa rede. O QR reutilizará as credenciais atuais e manterá esta entrada e suas entidades. A câmera só mudará de rede depois de ler o QR. Gere o código quando estiver perto dela; ele expira em dez minutos.",
+        "data": {
+          "ssid": "Nome do Wi-Fi (SSID)",
+          "wifi_password": "Senha do Wi-Fi",
+          "host": "Endereço da câmera na nova rede",
+          "local_server": "Endereço LAN do Home Assistant"
+        }
       }
     },
     "error": {
@@ -64,7 +100,13 @@
       "code_request_failed": "Não foi possível concluir a solicitação de código à Motorola. Ative o log de depuração e consulte o guia de solução de problemas.",
       "cloud_error": "A Motorola retornou uma resposta inesperada.",
       "invalid_host": "Informe um IP ou nome de rede, sem URL ou porta.",
-      "invalid_device_response": "A Motorola respondeu, mas os dados das câmeras não são compatíveis com esta integração. Ative o log de depuração e consulte o guia de solução de problemas."
+      "invalid_device_response": "A Motorola respondeu, mas os dados das câmeras não são compatíveis com esta integração. Ative o log de depuração e consulte o guia de solução de problemas.",
+      "invalid_pairing_settings": "Confira os endereços LAN, SSID (até 32 bytes) e senha (8–63 bytes).",
+      "pairing_ports_unavailable": "Não foi possível abrir as portas locais 3378, 4400 e 2278. Encerre outro pareamento e tente novamente.",
+      "pairing_not_ready": "A câmera ainda não concluiu cadastro, controle e vídeo locais. Aguarde e tente novamente; confira o DNS e a rede.",
+      "local_control_not_ready": "O cadastro foi aceito, mas o controle local ainda não inicializou. Aguarde e tente novamente.",
+      "local_video_unavailable": "Cadastro e controle confirmados, mas o vídeo não conectou. Tente novamente ou marque a opção para salvar o cadastro e investigar o vídeo sem perder as credenciais.",
+      "local_entry_unavailable": "Carregue a integração local existente antes de trocar o Wi-Fi."
     },
     "abort": {
       "already_configured": "Esta câmera já está configurada. Use Reconfigurar na entrada existente.",
@@ -73,7 +115,10 @@
       "wrong_account": "A câmera atual não foi encontrada nesta conta. A configuração existente foi preservada.",
       "no_devices": "Nenhuma câmera compatível foi encontrada nesta conta.",
       "reauth_successful": "A conta foi autenticada com sucesso.",
-      "reconfigure_successful": "A câmera foi reconfigurada com sucesso."
+      "reconfigure_successful": "A câmera foi reconfigurada com sucesso.",
+      "pairing_expired": "O pareamento expirou. Inicie novamente para gerar outro QR.",
+      "local_pairing_required": "A troca de Wi-Fi pelo HA está disponível para câmeras pareadas localmente.",
+      "pairing_configuration_changed": "A configuração mudou durante este pareamento. Inicie novamente; a configuração mais recente foi preservada."
     }
   },
   "entity": {

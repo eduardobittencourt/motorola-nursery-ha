@@ -2,13 +2,6 @@
   "title": "Motorola Nursery",
   "config": {
     "step": {
-      "user": {
-        "title": "Connect your Motorola account",
-        "description": "Enter your Motorola Nursery email. We will request a six-digit sign-in code.",
-        "data": {
-          "email": "Email"
-        }
-      },
       "code": {
         "title": "Confirm the email code",
         "description": "Enter the six-digit code sent by Motorola. No password is required.",
@@ -38,7 +31,8 @@
         "menu_options": {
           "user": "Connect or sign in to the Motorola account",
           "change_host": "Change the camera IP address",
-          "local_control": "Use local entity readings"
+          "local_control": "Use local entity readings",
+          "change_wifi": "Change Wi-Fi"
         }
       },
       "change_host": {
@@ -53,6 +47,48 @@
         "data": {
           "local_control": "Use local control"
         }
+      },
+      "account": {
+        "title": "Connect your Motorola account",
+        "description": "Enter your Motorola Nursery email. We will request a six-digit sign-in code.",
+        "data": {
+          "email": "Email"
+        }
+      },
+      "user": {
+        "title": "Add a Motorola camera",
+        "menu_options": {
+          "local_pairing": "Pair locally with HA (beta)",
+          "account": "Use a Motorola account"
+        }
+      },
+      "local_pairing": {
+        "title": "Local pairing — beta",
+        "description": "Use a 2.4 GHz Wi-Fi network with a reserved camera address. Configure DNS as described in the local pairing guide before continuing. Enter the HA LAN address. Wi-Fi credentials remain only in this configuration window. Do not reset yet.",
+        "data": {
+          "ssid": "Wi-Fi name (SSID)",
+          "wifi_password": "Wi-Fi password",
+          "host": "Reserved camera address",
+          "local_server": "Home Assistant LAN address"
+        }
+      },
+      "local_scan": {
+        "title": "Show the QR to the camera",
+        "description": "Use the HA light theme: the QR must be black on white. Put the camera into pairing mode using its physical button and show the QR to its lens. For first setup, wait for “pairing success”. When changing to a new address, you may submit to verify connectivity even after a failure announcement: HA requires a new control connection and video authenticated with the saved keys. The QR expires in ten minutes.",
+        "data": {
+          "qr_code": "Pairing QR",
+          "save_pairing": "Save pairing and continue investigating video"
+        }
+      },
+      "change_wifi": {
+        "title": "Change camera Wi-Fi",
+        "description": "Enter the new network and the camera address reserved on that network. The QR reuses existing credentials and preserves this entry and its entities. The camera changes networks only after scanning the QR. Generate it when you are near the camera; it expires in ten minutes.",
+        "data": {
+          "ssid": "Wi-Fi name (SSID)",
+          "wifi_password": "Wi-Fi password",
+          "host": "Camera address on the new network",
+          "local_server": "Home Assistant LAN address"
+        }
       }
     },
     "error": {
@@ -64,7 +100,13 @@
       "code_request_failed": "The Motorola code request could not be completed. Enable debug logging and see the troubleshooting guide.",
       "cloud_error": "Motorola returned an unexpected response.",
       "invalid_host": "Enter an IP address or hostname, without a URL or port.",
-      "invalid_device_response": "Motorola responded, but its camera details do not match the supported format. Enable debug logging and see the troubleshooting guide."
+      "invalid_device_response": "Motorola responded, but its camera details do not match the supported format. Enable debug logging and see the troubleshooting guide.",
+      "invalid_pairing_settings": "Check LAN addresses, SSID (up to 32 bytes), and password (8–63 bytes).",
+      "pairing_ports_unavailable": "Unable to open local ports 3378, 4400 and 2278. Close any other pairing attempt and try again.",
+      "pairing_not_ready": "Camera enrollment, local control and video are not ready. Wait and retry; check DNS and the network.",
+      "local_control_not_ready": "Enrollment was accepted, but local control is not initialized. Wait and retry.",
+      "local_video_unavailable": "Enrollment and control are confirmed, but video did not connect. Retry, or choose to save pairing and investigate video without losing credentials.",
+      "local_entry_unavailable": "Load the existing local integration before changing Wi-Fi."
     },
     "abort": {
       "already_configured": "This camera is already configured. Use Reconfigure on its existing entry.",
@@ -73,7 +115,10 @@
       "wrong_account": "The current camera was not found in this account. The existing configuration was preserved.",
       "no_devices": "No supported cameras were found in this account.",
       "reauth_successful": "The account was authenticated successfully.",
-      "reconfigure_successful": "The camera was reconfigured successfully."
+      "reconfigure_successful": "The camera was reconfigured successfully.",
+      "pairing_expired": "Pairing expired. Start again to generate a new QR.",
+      "local_pairing_required": "HA Wi-Fi changes are available for locally paired cameras.",
+      "pairing_configuration_changed": "Configuration changed during pairing. Start again; the latest configuration was preserved."
     }
   },
   "entity": {

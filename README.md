@@ -19,6 +19,7 @@
 - Camera-advertised settings such as night vision, brightness, video quality,
   speaker volume and detection sensitivity.
 - Lullaby media player for supported built-in tracks.
+- Experimental [HA-generated local pairing](docs/guides/local-pairing.md) for VM65CONNECT.
 - Optional experimental [incoming LAN readings](docs/guides/local-readings.md).
 
 Video and audio travel over the LAN independently of telemetry. The default
@@ -29,9 +30,13 @@ follows the camera's reported capabilities; see [entities and controls](docs/gui
 
 - **Home Assistant 2026.9.3 or newer**, with FFmpeg available.
 - A compatible Motorola Nursery camera using the 5GenCare MagicP2P tunnel.
-- A Motorola Nursery account and access to its email for setup.
+- A Motorola Nursery account and access to its email for the account setup path.
+  The beta [local pairing path](docs/guides/local-pairing.md) instead requires
+  explicit LAN DNS and network configuration.
 - A known camera IP address or hostname reachable from HA on TCP port **77**.
 - Internet access for account setup and the default telemetry transport.
+  Camera firmware may also require external services during startup; local
+  transport does not guarantee an offline cold boot.
 
 ## Installation
 
@@ -49,15 +54,19 @@ See [installation](docs/guides/installation.md) for manual setup,
 
 ## Configuration
 
-Enter the email used in Motorola Nursery, submit the six-digit email code,
+Choose account setup or the beta [local QR pairing](docs/guides/local-pairing.md)
+path. Local pairing serves enrollment, the camera clock and selector HTTP-DNS inside HA, with no
+add-on; local pairing is currently limited to VM65CONNECT.
+
+For account setup, enter the email used in Motorola Nursery, submit the six-digit email code,
 select the camera and enter its local IP address or hostname. The integration
 obtains camera credentials and checks the local connection.
 
 Use **Reconfigure** to change the address or reconnect the account. Existing
 manual-only entries retain local playback; connect an account to discover
-additional entities. Experimental LAN readings require a camera-initiated
-connection and explicit router configuration; ordinary camera IP access is
-insufficient. Follow the [local readings guide](docs/guides/local-readings.md).
+additional entities. Experimental LAN readings for account-paired cameras require
+a camera-initiated connection and explicit router configuration; ordinary camera
+IP access is insufficient. Locally QR-paired cameras target HA directly. Follow the [local readings guide](docs/guides/local-readings.md).
 
 ## Compatibility and limitations
 
@@ -68,9 +77,13 @@ recorded in the [compatibility guide](docs/guides/compatibility.md).
 - Support varies by model and advertised capabilities. Directional PTZ movement
   has been verified on **PIP1610HDCONNECT**; talkback is not integrated.
 - Camera address discovery is not implemented.
-- Cloud outages affect the default telemetry transport; local video remains independent.
+- Cloud outages affect the default telemetry transport. Media travels locally,
+  but camera firmware may prevent offline startup or repeatedly reconfigure its
+  network during an outage.
 - Incoming LAN readings have no cloud fallback or automatic credential renewal.
-  Cold boot and prolonged offline operation still need validation.
+  They can become unavailable during a WAN outage, including with local QR
+  pairing. Prolonged offline operation remains unverified; see the
+  [startup limits](docs/guides/compatibility.md#network-and-account-limits).
 - Long-term session expiry, other regions, account sharing and concurrent phone
   or multiple-HA use remain unverified.
 - Recovery checks the tunnel handshake; internal RTSP rejection alone does not

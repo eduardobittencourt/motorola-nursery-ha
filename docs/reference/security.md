@@ -24,3 +24,17 @@ Logs and diagnostics omit account/device credentials, identifiers and private
 addresses. Review excerpts before publication; other HA integrations can log
 private data. Never attach raw captures, vendor binaries or private media.
 Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+The beta local pairing flow temporarily opens TCP3378, accepts only the supplied
+camera source address, a fresh QR identifier and the supported model, and pins
+subsequent requests to the first accepted device identifier. Enrollment expires
+after ten minutes; a bounded TCP4400 clock accepts only registered camera source
+addresses. TCP40280 HTTP-DNS accepts only registered camera sources and resolves
+only the HA selector associated with that camera. It does not resolve other
+hostnames, forward requests or contact upstream services. Requests are bounded,
+body-free GETs; no received fields enter logs. All bootstrap services limit
+concurrent connections, request time and framing.
+The legacy enrollment request cannot cryptographically prove physical device
+identity. The QR identifier/source restriction is a trusted-LAN boundary, not
+modern device authentication. Do not enable pairing on an untrusted network.
+Wi-Fi data is not persisted; only generated camera credentials enter HA storage.

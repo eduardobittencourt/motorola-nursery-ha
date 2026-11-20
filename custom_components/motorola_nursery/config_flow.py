@@ -26,6 +26,7 @@ from homeassistant.loader import async_get_integration
 from homeassistant.util.network import is_host_valid
 
 from .auth import account_lock, async_client, credentials_from_data, device_data
+from .bootstrap import lan_address
 from .cloud import (
     AuthenticationError,
     Challenge,
@@ -36,11 +37,13 @@ from .cloud import (
     Session,
     atom,
 )
+from .config_flow_local import LocalPairingFlow
 from .const import (
     CONF_CODE,
     CONF_DEVICE,
     CONF_EMAIL,
     CONF_LOCAL_CONTROL,
+    CONF_LOCAL_PAIRING,
     CONF_SESSION,
     DOMAIN,
 )
@@ -50,7 +53,7 @@ NETWORK_ERRORS = (OSError, EOFError)
 _LOGGER = logging.getLogger(__name__)
 
 
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class ConfigFlow(LocalPairingFlow, config_entries.ConfigFlow, domain=DOMAIN):
     """One config entry per camera, preserving the original unique ID."""
 
     VERSION = 1
@@ -86,9 +89,20 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @override
     def async_remove(self) -> None:
         super().async_remove()
-        self.hass.async_create_task(self._close_client())
+        self.hass.async_create_task(self._close_resources())
 
-    async def async_step_user(
+    async def _close_resources(self) -> None:
+        await self._close_client()
+        await self._close_pairing()
+
+    async def async_step_user(self, user_input=None) -> ConfigFlowResult:
+        if self._target_entry() is not None:
+            return await self.async_step_account(user_input)
+        return self.async_show_menu(
+            step_id="user", menu_options=["local_pairing", "account"]
+        )
+
+    async def async_step_account(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """An explicit email form submission is the only code-send trigger."""
@@ -143,7 +157,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_code()
             await self._close_client()
         return self.async_show_form(
-            step_id="user",
+            step_id="account",
             errors=errors,
             data_schema=vol.Schema(
                 {
@@ -330,6 +344,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return await self.async_step_user()
 
     async def async_step_reconfigure(self, user_input=None) -> ConfigFlowResult:
+        if self._get_reconfigure_entry().data.get(CONF_LOCAL_PAIRING, False):
+            return self.async_show_menu(
+                step_id="reconfigure", menu_options=["change_wifi", "change_host"]
+            )
         return self.async_show_menu(
             step_id="reconfigure", menu_options=["user", "change_host", "local_control"]
         )
@@ -359,7 +377,13 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
             host = user_input[CONF_HOST].strip()
-            if not is_host_valid(host):
+            valid = is_host_valid(host)
+            if entry.data.get(CONF_LOCAL_PAIRING, False):
+                try:
+                    host = lan_address(host)
+                except ValueError:
+                    valid = False
+            if not valid:
                 errors[CONF_HOST] = "invalid_host"
             else:
                 _LOGGER.debug("Local camera probe started: source=change_host")

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import override
 
 from homeassistant.components.camera import Camera, CameraEntityFeature
+from homeassistant.components.stream.const import HLS_PROVIDER
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -46,8 +47,25 @@ class MotorolaNurseryCamera(Camera):
     @property
     @override
     def use_stream_for_stills(self) -> bool:
-        """Generate still images from the video stream."""
-        return True
+        """Generate stills through the shared native stream worker."""
+        return False
+
+    @override
+    async def async_camera_image(
+        self, width: int | None = None, height: int | None = None
+    ) -> bytes | None:
+        """Share the native stream worker between still images and HLS playback."""
+        await self._runtime.async_prepare_stream()
+        stream = await self.async_create_stream()
+        if stream is None:
+            return None
+        # Snapshot requests are stream consumers too; let HA stop it after they idle.
+        stream.add_provider(HLS_PROVIDER).idle_timer.awake()
+        # A cached frame can outlive a disconnected camera or a failed restart.
+        image = await stream.async_get_image(
+            width=width, height=height, wait_for_next_keyframe=True
+        )
+        return image if stream.available else None
 
     @override
     async def stream_source(self) -> str:
